@@ -27,21 +27,8 @@ public class ClientServiceImpl implements ClientService {
                 client.setNbVisitesAn(4);
             }
 
-            // Sauvegarder le client
             Client saved = clientRepository.save(client);
             System.out.println("✅ Client sauvegardé avec ID: " + saved.getId());
-
-            // Créer un site par défaut automatiquement avec les mêmes infos
-            Site defaultSite = new Site();
-            defaultSite.setClient(saved);
-            defaultSite.setNom("Site - " + saved.getNom());
-            defaultSite.setAdresse(saved.getAdresseSiege());
-            defaultSite.setEmailContact(saved.getEmailContact());
-            defaultSite.setTelephone(saved.getTelephone());
-            defaultSite.setActif(true);
-
-            Site savedSite = siteRepository.save(defaultSite);
-            System.out.println("✅ Site par défaut créé avec ID: " + savedSite.getId() + " pour le client: " + saved.getNom());
 
             return saved;
         } catch (Exception e) {
@@ -51,22 +38,41 @@ public class ClientServiceImpl implements ClientService {
         }
     }
 
+    // ✅ AJOUTER cette méthode
     @Override
     @Transactional
     public Client updateClient(Client client) {
-        return clientRepository.save(client);
+        try {
+            System.out.println("📝 Mise à jour du client ID: " + client.getId());
+            Client updated = clientRepository.save(client);
+            System.out.println("✅ Client mis à jour avec succès");
+            return updated;
+        } catch (Exception e) {
+            System.err.println("❌ Erreur dans updateClient: " + e.getMessage());
+            e.printStackTrace();
+            throw e;
+        }
     }
 
     @Override
     @Transactional
     public void deleteClient(Integer id) {
-        // Supprimer d'abord les sites associés
-        List<Site> sites = siteRepository.findByClientId(id);
-        for (Site site : sites) {
-            siteRepository.delete(site);
+        try {
+            System.out.println("📝 Suppression du client ID: " + id);
+            // Supprimer d'abord les sites associés
+            List<Site> sites = siteRepository.findByClientId(id);
+            for (Site site : sites) {
+                siteRepository.delete(site);
+                System.out.println("  ✅ Site supprimé: " + site.getNom());
+            }
+            // Puis supprimer le client
+            clientRepository.deleteById(id);
+            System.out.println("✅ Client supprimé avec succès");
+        } catch (Exception e) {
+            System.err.println("❌ Erreur dans deleteClient: " + e.getMessage());
+            e.printStackTrace();
+            throw e;
         }
-        // Puis supprimer le client
-        clientRepository.deleteById(id);
     }
 
     @Override
@@ -101,10 +107,12 @@ public class ClientServiceImpl implements ClientService {
     @Override
     public void importFromExcel(String filePath) {
         // TODO: Implement Excel import
+        System.out.println("📤 Import Excel: " + filePath);
     }
 
     @Override
     public void exportToExcel(String filePath) {
         // TODO: Implement Excel export
+        System.out.println("📤 Export Excel: " + filePath);
     }
 }

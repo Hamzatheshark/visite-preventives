@@ -43,7 +43,7 @@ public class PlanningDTO {
     private String technicienPrenom;
     private String technicienEmail;
 
-    // ✅ Responsable (NOUVEAU)
+    // Responsable
     private Integer responsableId;
     private String responsableNom;
     private String responsablePrenom;

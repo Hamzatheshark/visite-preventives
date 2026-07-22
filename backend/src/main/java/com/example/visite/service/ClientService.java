@@ -6,7 +6,7 @@ import java.util.List;
 
 public interface ClientService {
     Client createClient(Client client);
-    Client updateClient(Client client);
+    Client updateClient(Client client);  // ← Cette méthode existe
     void deleteClient(Integer id);
     Client getClientById(Integer id);
     List<Client> getAllClients();

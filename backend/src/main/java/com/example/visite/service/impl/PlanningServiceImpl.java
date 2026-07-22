@@ -1,3 +1,4 @@
+// service/impl/PlanningServiceImpl.java
 package com.example.visite.service.impl;
 
 import com.example.visite.model.*;
@@ -63,9 +64,9 @@ public class PlanningServiceImpl implements PlanningService {
     @Override
     public List<Planning> getAllPlannings() {
         log.info("📋 Récupération de tous les plannings avec détails...");
-        List<Planning> plannings = planningRepository.findAllWithDetails();
+        List<Planning> plannings = planningRepository.findAll();
 
-        // ✅ AJOUTER UN LOG POUR VÉRIFIER
+        // Log pour vérifier les données
         for (Planning p : plannings) {
             log.info("📊 Planning V{}: Technicien={}, Responsable={}",
                     p.getNumVisite(),
@@ -273,7 +274,7 @@ public class PlanningServiceImpl implements PlanningService {
     }
 
     // ============================================================
-    // CONVERSION EN DTO - VERSION CORRIGÉE
+    // CONVERSION EN DTO
     // ============================================================
 
     @Override
@@ -301,7 +302,6 @@ public class PlanningServiceImpl implements PlanningService {
             dto.setClientNom(client.getNom());
             dto.setClientEmail(client.getEmailContact());
             dto.setClientCode(client.getCode());
-            log.info("📋 Client trouvé: {}", client.getNom());
         }
 
         // Site
@@ -312,31 +312,28 @@ public class PlanningServiceImpl implements PlanningService {
             dto.setSiteAdresse(site.getAdresse());
             dto.setSiteEmailContact(site.getEmailContact());
             dto.setSiteTelephone(site.getTelephone());
-            log.info("📍 Site trouvé: {}", site.getNom());
         }
 
-        // ✅ Technicien - avec gestion des null
+        // Technicien
         if (planning.getTechnicien() != null) {
             Utilisateur tech = planning.getTechnicien();
             dto.setTechnicienId(tech.getId());
             dto.setTechnicienNom(tech.getNom() + " " + tech.getPrenom());
             dto.setTechnicienPrenom(tech.getPrenom());
             dto.setTechnicienEmail(tech.getEmail());
-            log.info("🔧 Technicien trouvé pour V{}: {} (ID: {})",
-                    planning.getNumVisite(), dto.getTechnicienNom(), tech.getId());
+            log.info("🔧 Technicien trouvé pour V{}: {}", planning.getNumVisite(), dto.getTechnicienNom());
         } else {
             log.info("⚠️ Aucun technicien pour V{}", planning.getNumVisite());
         }
 
-        // ✅ Responsable - avec gestion des null
+        // Responsable
         if (planning.getResponsable() != null) {
             Utilisateur resp = planning.getResponsable();
             dto.setResponsableId(resp.getId());
             dto.setResponsableNom(resp.getNom() + " " + resp.getPrenom());
             dto.setResponsablePrenom(resp.getPrenom());
             dto.setResponsableEmail(resp.getEmail());
-            log.info("👤 Responsable trouvé pour V{}: {} (ID: {})",
-                    planning.getNumVisite(), dto.getResponsableNom(), resp.getId());
+            log.info("👤 Responsable trouvé pour V{}: {}", planning.getNumVisite(), dto.getResponsableNom());
         } else {
             log.info("⚠️ Aucun responsable pour V{}", planning.getNumVisite());
         }

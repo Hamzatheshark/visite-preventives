@@ -21,7 +21,6 @@ public class ClientController {
 
     private final ClientService clientService;
 
-    // ✅ Méthode qui retourne les sites comme des "clients" séparés
     @GetMapping
     public ResponseEntity<List<Map<String, Object>>> getAllClientsWithSites() {
         List<Client> clients = clientService.getAllClients();
@@ -29,25 +28,26 @@ public class ClientController {
 
         for (Client client : clients) {
             if (client.getSites() != null && !client.getSites().isEmpty()) {
-                // ✅ Un site par ligne
+                // ✅ Pour chaque site du client, créer une entrée
                 for (Site site : client.getSites()) {
                     Map<String, Object> entry = new HashMap<>();
-                    entry.put("id", client.getId());  // ID du client
-                    entry.put("nom", client.getNom() + " (" + site.getNom() + ")");  // Client (Site)
+
+                    entry.put("id", client.getId());
+                    entry.put("nom", client.getNom());  // ← juste "amine"
                     entry.put("nomClient", client.getNom());
                     entry.put("siteId", site.getId());
-                    entry.put("siteNom", site.getNom());
+                    entry.put("siteNom", site.getNom());  // ← "barcelona" ou "Site - amine"
                     entry.put("siteAdresse", site.getAdresse());
                     entry.put("emailContact", site.getEmailContact() != null ? site.getEmailContact() : client.getEmailContact());
                     entry.put("telephone", site.getTelephone() != null ? site.getTelephone() : client.getTelephone());
                     entry.put("adresseSiege", site.getAdresse() != null ? site.getAdresse() : client.getAdresseSiege());
                     entry.put("nbVisitesAn", client.getNbVisitesAn());
                     entry.put("actif", site.getActif());
-                    entry.put("sites", List.of(site));  // Pour garder la compatibilité
+                    entry.put("sites", List.of(site));
+
                     result.add(entry);
                 }
             } else {
-                // ✅ Client sans site
                 Map<String, Object> entry = new HashMap<>();
                 entry.put("id", client.getId());
                 entry.put("nom", client.getNom());
@@ -66,12 +66,6 @@ public class ClientController {
         }
 
         return ResponseEntity.ok(result);
-    }
-
-    // ✅ Méthode pour récupérer un client avec ses sites (format groupé)
-    @GetMapping("/grouped")
-    public ResponseEntity<List<Client>> getAllClientsGrouped() {
-        return ResponseEntity.ok(clientService.getAllClients());
     }
 
     @GetMapping("/{id}")

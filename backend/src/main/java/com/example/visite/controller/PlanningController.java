@@ -1,10 +1,11 @@
+// controller/PlanningController.java
 package com.example.visite.controller;
 
-import com.example.visite.dto.PlanningDTO;
 import com.example.visite.model.Planning;
 import com.example.visite.model.enums.StatutVisite;
 import com.example.visite.service.PlanningService;
 import com.example.visite.service.PlanningAutomatiqueService;
+import com.example.visite.dto.PlanningDTO;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
@@ -12,9 +13,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 @RestController
 @RequestMapping("/api/plannings")
@@ -23,61 +22,167 @@ import java.util.Map;
 public class PlanningController {
 
     private final PlanningService planningService;
-    private final PlanningAutomatiqueService planningAutomatiqueService;
+    private final PlanningAutomatiqueService planningAutomatiqueService; // ✅ AJOUT
 
-    // ==================== GET ====================
+    // ============================================================
+    // ✅ PLANIFICATION AUTOMATIQUE
+    // ============================================================
+
+    // ✅ Planifier pour un client spécifique (utilise PlanningAutomatiqueService)
+    @PostMapping("/planifier-client/{clientId}")
+    public ResponseEntity<String> planifierClient(@PathVariable Integer clientId) {
+        try {
+            System.out.println("📤 Planification pour le client ID: " + clientId);
+            List<Planning> plannings = planningAutomatiqueService.planifierVisitesPourClient(clientId);
+
+            if (plannings.isEmpty()) {
+                return ResponseEntity.ok("Aucune visite à planifier pour ce client");
+            }
+
+            return ResponseEntity.ok(plannings.size() + " visite(s) planifiée(s) avec succès");
+        } catch (Exception e) {
+            System.err.println("❌ Erreur planification client: " + e.getMessage());
+            e.printStackTrace();
+            return ResponseEntity.internalServerError().body("Erreur: " + e.getMessage());
+        }
+    }
+
+    // ✅ Planifier pour tous les clients (utilise PlanningAutomatiqueService)
+    @PostMapping("/procedure/lancer-planification")
+    public ResponseEntity<String> lancerPlanification() {
+        try {
+            System.out.println("📤 Planification automatique pour tous les clients...");
+            int count = planningAutomatiqueService.planifierVisitesPourTousLesClients();
+            return ResponseEntity.ok(count + " visite(s) planifiée(s) pour tous les clients");
+        } catch (Exception e) {
+            System.err.println("❌ Erreur planification générale: " + e.getMessage());
+            e.printStackTrace();
+            return ResponseEntity.internalServerError().body("Erreur: " + e.getMessage());
+        }
+    }
+
+    // ✅ Envoyer une proposition (utilise PlanningAutomatiqueService)
+    @PostMapping("/envoyer-proposition/{planningId}")
+    public ResponseEntity<String> envoyerProposition(@PathVariable Integer planningId) {
+        try {
+            planningAutomatiqueService.envoyerProposition(planningId);
+            return ResponseEntity.ok("Proposition envoyée avec succès");
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().body("Erreur: " + e.getMessage());
+        }
+    }
+
+    // ✅ Traiter une réponse client (utilise PlanningAutomatiqueService)
+    @PostMapping("/reponse-client/{planningId}")
+    public ResponseEntity<String> traiterReponseClient(
+            @PathVariable Integer planningId,
+            @RequestParam boolean accepte) {
+        try {
+            boolean result = planningAutomatiqueService.traiterReponseClient(planningId, accepte);
+            return ResponseEntity.ok(result ? "Réponse traitée avec succès" : "Erreur lors du traitement");
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().body("Erreur: " + e.getMessage());
+        }
+    }
+
+    // ✅ Envoyer les relances (utilise PlanningAutomatiqueService)
+    @PostMapping("/envoyer-relances")
+    public ResponseEntity<String> envoyerRelances() {
+        try {
+            int count = planningAutomatiqueService.envoyerRelances();
+            return ResponseEntity.ok(count + " relance(s) envoyée(s)");
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().body("Erreur: " + e.getMessage());
+        }
+    }
+
+    // ✅ Vérifier et mettre à jour les statuts (utilise PlanningAutomatiqueService)
+    @PostMapping("/verifier-statuts")
+    public ResponseEntity<String> verifierStatuts() {
+        try {
+            planningAutomatiqueService.verifierEtMettreAJourStatuts();
+            return ResponseEntity.ok("Statuts mis à jour avec succès");
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().body("Erreur: " + e.getMessage());
+        }
+    }
+
+    // ✅ Vérifier les relances (utilise PlanningAutomatiqueService)
+    @PostMapping("/verifier-relances")
+    public ResponseEntity<String> verifierRelances() {
+        try {
+            planningAutomatiqueService.verifierRelances();
+            return ResponseEntity.ok("Relances vérifiées avec succès");
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().body("Erreur: " + e.getMessage());
+        }
+    }
+
+    // ✅ Assigner un technicien automatiquement (utilise PlanningAutomatiqueService)
+    @PostMapping("/assigner-technicien-auto/{planningId}")
+    public ResponseEntity<String> assignerTechnicienAuto(@PathVariable Integer planningId) {
+        try {
+            Planning planning = planningAutomatiqueService.assignerTechnicienAutomatiquement(planningId);
+            return ResponseEntity.ok("Technicien assigné avec succès");
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().body("Erreur: " + e.getMessage());
+        }
+    }
+
+    // ============================================================
+    // ✅ MÉTHODES EXISTANTES (GET)
+    // ============================================================
 
     @GetMapping
     public ResponseEntity<List<PlanningDTO>> getAllPlannings() {
         List<Planning> plannings = planningService.getAllPlannings();
-        // ✅ Utiliser la méthode du service
-        List<PlanningDTO> dtos = planningService.convertToDTOList(plannings);
-        return ResponseEntity.ok(dtos);
+        return ResponseEntity.ok(planningService.convertToDTOList(plannings));
     }
 
     @GetMapping("/{id}")
     public ResponseEntity<PlanningDTO> getPlanningById(@PathVariable Integer id) {
         Planning planning = planningService.getPlanningById(id);
-        // ✅ Utiliser la méthode du service
         return ResponseEntity.ok(planningService.convertToDTO(planning));
     }
-
-    @GetMapping("/statut/{statut}")
-    public ResponseEntity<List<PlanningDTO>> getPlanningsByStatut(@PathVariable StatutVisite statut) {
-        List<Planning> plannings = planningService.getPlanningsByStatut(statut);
-        // ✅ Utiliser la méthode du service
-        return ResponseEntity.ok(planningService.convertToDTOList(plannings));
-    }
-
-    @GetMapping("/site/{siteId}")
-    public ResponseEntity<List<PlanningDTO>> getPlanningsBySite(@PathVariable Integer siteId) {
-        List<Planning> plannings = planningService.getPlanningsBySite(siteId);
-        // ✅ Utiliser la méthode du service
-        return ResponseEntity.ok(planningService.convertToDTOList(plannings));
-    }
-
-    @GetMapping("/date-range")
-    public ResponseEntity<List<PlanningDTO>> getPlanningsByDateRange(
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate start,
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate end) {
-        List<Planning> plannings = planningService.getPlanningsByDateRange(start, end);
-        // ✅ Utiliser la méthode du service
-        return ResponseEntity.ok(planningService.convertToDTOList(plannings));
-    }
-
-    @GetMapping("/sans-pi")
-    public ResponseEntity<List<PlanningDTO>> getVisitesSansPI() {
-        List<Planning> plannings = planningService.getVisitesSansPI();
-        // ✅ Utiliser la méthode du service
-        return ResponseEntity.ok(planningService.convertToDTOList(plannings));
-    }
-
-    // ==================== POST ====================
 
     @PostMapping
     public ResponseEntity<Planning> createPlanning(@RequestBody Planning planning) {
         return new ResponseEntity<>(planningService.createPlanning(planning), HttpStatus.CREATED);
     }
+
+    @PutMapping("/{id}")
+    public ResponseEntity<Planning> updatePlanning(@PathVariable Integer id, @RequestBody Planning planning) {
+        planning.setId(id);
+        return ResponseEntity.ok(planningService.updatePlanning(planning));
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> deletePlanning(@PathVariable Integer id) {
+        planningService.deletePlanning(id);
+        return ResponseEntity.noContent().build();
+    }
+
+    @GetMapping("/statut/{statut}")
+    public ResponseEntity<List<PlanningDTO>> getPlanningsByStatut(@PathVariable StatutVisite statut) {
+        List<Planning> plannings = planningService.getPlanningsByStatut(statut);
+        return ResponseEntity.ok(planningService.convertToDTOList(plannings));
+    }
+
+    @GetMapping("/site/{siteId}")
+    public ResponseEntity<List<Planning>> getPlanningsBySite(@PathVariable Integer siteId) {
+        return ResponseEntity.ok(planningService.getPlanningsBySite(siteId));
+    }
+
+    @GetMapping("/date-range")
+    public ResponseEntity<List<Planning>> getPlanningsByDateRange(
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate start,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate end) {
+        return ResponseEntity.ok(planningService.getPlanningsByDateRange(start, end));
+    }
+
+    // ============================================================
+    // ✅ MÉTHODES EXISTANTES (POST - conservées pour compatibilité)
+    // ============================================================
 
     @PostMapping("/planifier/{contratId}")
     public ResponseEntity<Void> planifierAutomatiquement(@PathVariable Integer contratId) {
@@ -85,22 +190,8 @@ public class PlanningController {
         return ResponseEntity.ok().build();
     }
 
-    @PostMapping("/planifier-client/{clientId}")
-    public ResponseEntity<?> planifierPourClient(@PathVariable Integer clientId) {
-        try {
-            planningAutomatiqueService.planifierVisitesPourClient(clientId);
-            Map<String, String> response = new HashMap<>();
-            response.put("message", "Planification lancée avec succès");
-            return ResponseEntity.ok(response);
-        } catch (Exception e) {
-            Map<String, String> error = new HashMap<>();
-            error.put("error", e.getMessage());
-            return ResponseEntity.badRequest().body(error);
-        }
-    }
-
     @PostMapping("/envoyer/{planningId}")
-    public ResponseEntity<Void> envoyerProposition(@PathVariable Integer planningId) {
+    public ResponseEntity<Void> envoyerPropositionOld(@PathVariable Integer planningId) {
         planningService.envoyerProposition(planningId);
         return ResponseEntity.ok().build();
     }
@@ -135,20 +226,6 @@ public class PlanningController {
         return ResponseEntity.ok().build();
     }
 
-    @PostMapping("/assigner-auto/{planningId}")
-    public ResponseEntity<?> assignerTechnicienAuto(@PathVariable Integer planningId) {
-        try {
-            planningAutomatiqueService.assignerTechnicienAutomatiquement(planningId);
-            Map<String, String> response = new HashMap<>();
-            response.put("message", "Technicien assigné automatiquement avec succès");
-            return ResponseEntity.ok(response);
-        } catch (Exception e) {
-            Map<String, String> error = new HashMap<>();
-            error.put("error", e.getMessage());
-            return ResponseEntity.badRequest().body(error);
-        }
-    }
-
     @PostMapping("/realiser/{planningId}")
     public ResponseEntity<Void> marquerRealise(
             @PathVariable Integer planningId,
@@ -157,86 +234,8 @@ public class PlanningController {
         return ResponseEntity.ok().build();
     }
 
-    @PostMapping("/procedure/lancer-planification")
-    public ResponseEntity<?> lancerPlanification() {
-        try {
-            int count = planningAutomatiqueService.planifierVisitesPourTousLesClients();
-            Map<String, String> response = new HashMap<>();
-            response.put("message", "Planification automatique lancée avec succès");
-            response.put("visitesCrees", String.valueOf(count));
-            return ResponseEntity.ok(response);
-        } catch (Exception e) {
-            Map<String, String> error = new HashMap<>();
-            error.put("error", e.getMessage());
-            return ResponseEntity.badRequest().body(error);
-        }
-    }
-
-    @PostMapping("/procedure/reponse-email")
-    public ResponseEntity<?> traiterReponseEmail(
-            @RequestParam String contenu,
-            @RequestParam Integer planningId) {
-        try {
-            boolean accepte = contenu.toUpperCase().contains("ACCEPTE") ||
-                    contenu.toUpperCase().contains("ACCEPT");
-            planningAutomatiqueService.traiterReponseClient(planningId, accepte);
-
-            Map<String, String> response = new HashMap<>();
-            response.put("message", "Réponse traitée avec succès");
-            return ResponseEntity.ok(response);
-        } catch (Exception e) {
-            Map<String, String> error = new HashMap<>();
-            error.put("error", e.getMessage());
-            return ResponseEntity.badRequest().body(error);
-        }
-    }
-
-    @PostMapping("/procedure/envoyer-propositions")
-    public ResponseEntity<?> envoyerPropositions() {
-        try {
-            List<Planning> visitesEnAttente = planningService.getPlanningsByStatut(StatutVisite.EN_ATTENTE);
-            for (Planning planning : visitesEnAttente) {
-                if (planning.getDateEnvoi() == null) {
-                    planningAutomatiqueService.envoyerProposition(planning.getId());
-                }
-            }
-            Map<String, String> response = new HashMap<>();
-            response.put("message", "Propositions envoyées avec succès");
-            return ResponseEntity.ok(response);
-        } catch (Exception e) {
-            Map<String, String> error = new HashMap<>();
-            error.put("error", e.getMessage());
-            return ResponseEntity.badRequest().body(error);
-        }
-    }
-
-    @PostMapping("/procedure/verifier-relances")
-    public ResponseEntity<?> verifierRelances() {
-        try {
-            planningAutomatiqueService.verifierRelances();
-            Map<String, String> response = new HashMap<>();
-            response.put("message", "Vérification des relances effectuée");
-            return ResponseEntity.ok(response);
-        } catch (Exception e) {
-            Map<String, String> error = new HashMap<>();
-            error.put("error", e.getMessage());
-            return ResponseEntity.badRequest().body(error);
-        }
-    }
-
-    // ==================== PUT ====================
-
-    @PutMapping("/{id}")
-    public ResponseEntity<Planning> updatePlanning(@PathVariable Integer id, @RequestBody Planning planning) {
-        planning.setId(id);
-        return ResponseEntity.ok(planningService.updatePlanning(planning));
-    }
-
-    // ==================== DELETE ====================
-
-    @DeleteMapping("/{id}")
-    public ResponseEntity<Void> deletePlanning(@PathVariable Integer id) {
-        planningService.deletePlanning(id);
-        return ResponseEntity.noContent().build();
+    @GetMapping("/sans-pi")
+    public ResponseEntity<List<Planning>> getVisitesSansPI() {
+        return ResponseEntity.ok(planningService.getVisitesSansPI());
     }
 }

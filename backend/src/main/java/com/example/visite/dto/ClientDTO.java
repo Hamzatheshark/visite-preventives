@@ -18,4 +18,7 @@ public class ClientDTO {
     private Integer nbVisitesAn;
     private Boolean actif;
     private LocalDateTime dateCreation;
+
+    // ✅ AJOUTER siteNom (sera rempli depuis sites[0].nom)
+    private String siteNom;
 }
