@@ -1,11 +1,12 @@
+// service/impl/SiteServiceImpl.java
 package com.example.visite.service.impl;
 
 import com.example.visite.model.Site;
-import com.example.visite.model.Client;
 import com.example.visite.repository.SiteRepository;
-import com.example.visite.repository.ClientRepository;
 import com.example.visite.service.SiteService;
+import com.example.visite.service.GeocodingService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -13,48 +14,15 @@ import java.util.List;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class SiteServiceImpl implements SiteService {
 
     private final SiteRepository siteRepository;
-    private final ClientRepository clientRepository;
+    private final GeocodingService geocodingService;
 
     @Override
-    @Transactional
-    public Site createSite(Site site) {
-        // ✅ Vérifier que le client existe
-        if (site.getClient() == null || site.getClient().getId() == null) {
-            throw new IllegalArgumentException("Le client est requis pour créer un site");
-        }
-
-        Client client = clientRepository.findById(site.getClient().getId())
-                .orElseThrow(() -> new RuntimeException("Client non trouvé avec l'ID: " + site.getClient().getId()));
-
-        site.setClient(client);
-        site.setActif(true);
-        return siteRepository.save(site);
-    }
-
-    @Override
-    @Transactional
-    public Site updateSite(Site site) {
-        // ✅ Vérifier que le site existe
-        Site existingSite = siteRepository.findById(site.getId())
-                .orElseThrow(() -> new RuntimeException("Site non trouvé avec l'ID: " + site.getId()));
-
-        // ✅ Conserver le client existant
-        if (site.getClient() == null || site.getClient().getId() == null) {
-            site.setClient(existingSite.getClient());
-        }
-
-        return siteRepository.save(site);
-    }
-
-    @Override
-    @Transactional
-    public void deleteSite(Integer id) {
-        Site site = siteRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Site non trouvé avec l'ID: " + id));
-        siteRepository.delete(site);
+    public List<Site> getAllSites() {
+        return siteRepository.findAll();
     }
 
     @Override
@@ -64,12 +32,52 @@ public class SiteServiceImpl implements SiteService {
     }
 
     @Override
-    public List<Site> getAllSites() {
-        return siteRepository.findAll();
+    public List<Site> getSitesByClient(Integer clientId) {
+        return siteRepository.findByClientId(clientId);
     }
 
     @Override
-    public List<Site> getSitesByClient(Integer clientId) {
-        return siteRepository.findByClientId(clientId);
+    @Transactional
+    public Site createSite(Site site) {
+        if (site.getAdresse() != null && !site.getAdresse().isEmpty()) {
+            if (site.getLatitude() == null || site.getLongitude() == null) {
+                geocodingService.geocodeSite(site);
+            }
+        }
+        return siteRepository.save(site);
+    }
+
+    @Override
+    @Transactional
+    public Site updateSite(Site site) {
+        Site existing = getSiteById(site.getId());
+
+        existing.setNom(site.getNom());
+        existing.setAdresse(site.getAdresse());
+        existing.setEmailContact(site.getEmailContact());
+        existing.setTelephone(site.getTelephone());
+        existing.setActif(site.getActif());
+
+        if (site.getAdresse() != null && !site.getAdresse().equals(existing.getAdresse())) {
+            existing.setLatitude(null);
+            existing.setLongitude(null);
+            geocodingService.geocodeSite(existing);
+        }
+
+        return siteRepository.save(existing);
+    }
+
+    @Override
+    @Transactional
+    public void deleteSite(Integer id) {
+        siteRepository.deleteById(id);
+    }
+
+    @Override
+    @Transactional
+    public Site geocodeSite(Integer siteId) {
+        Site site = getSiteById(siteId);
+        geocodingService.geocodeSite(site);
+        return siteRepository.save(site);
     }
 }

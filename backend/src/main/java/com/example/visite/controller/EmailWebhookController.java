@@ -8,8 +8,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Base64;
-import java.util.HashMap;
-import java.util.Map;
 
 @RestController
 @RequestMapping("/api/emails")
@@ -21,9 +19,8 @@ public class EmailWebhookController {
     private final PlanningService planningService;
 
     @GetMapping("/reponse/{token}")
-    public ResponseEntity<?> traiterReponseEmail(@PathVariable String token) {
+    public ResponseEntity<String> traiterReponseEmail(@PathVariable String token) {
         try {
-            // Décoder le token (Base64 simple)
             String decoded = new String(Base64.getDecoder().decode(token));
             String[] parts = decoded.split(":");
             Integer planningId = Integer.parseInt(parts[0]);
@@ -31,20 +28,349 @@ public class EmailWebhookController {
 
             planningService.traiterReponseClient(planningId, accepte);
 
-            Map<String, String> response = new HashMap<>();
-            response.put("message", accepte ?
-                    "✅ Visite acceptée avec succès !" :
-                    "❌ Visite refusée. Une nouvelle proposition vous sera envoyée.");
-            response.put("statut", "success");
+            String htmlResponse = buildHtmlResponse(accepte);
 
-            return ResponseEntity.ok(response);
+            return ResponseEntity.ok()
+                    .header("Content-Type", "text/html;charset=UTF-8")
+                    .body(htmlResponse);
 
         } catch (Exception e) {
             log.error("Erreur traitement réponse:", e);
-            Map<String, String> error = new HashMap<>();
-            error.put("message", "❌ Erreur lors du traitement de votre réponse");
-            error.put("error", e.getMessage());
-            return ResponseEntity.badRequest().body(error);
+            return ResponseEntity.ok()
+                    .header("Content-Type", "text/html;charset=UTF-8")
+                    .body(buildErrorHtmlResponse(e.getMessage()));
         }
+    }
+
+    private String buildHtmlResponse(boolean accepte) {
+        if (accepte) {
+            return "<!DOCTYPE html>\n" +
+                    "<html lang=\"fr\">\n" +
+                    "<head>\n" +
+                    "    <meta charset=\"UTF-8\">\n" +
+                    "    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n" +
+                    "    <title>RMS - Confirmation</title>\n" +
+                    "    <style>\n" +
+                    "        * { margin: 0; padding: 0; box-sizing: border-box; }\n" +
+                    "        body {\n" +
+                    "            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;\n" +
+                    "            background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%);\n" +
+                    "            min-height: 100vh;\n" +
+                    "            display: flex;\n" +
+                    "            justify-content: center;\n" +
+                    "            align-items: center;\n" +
+                    "            padding: 20px;\n" +
+                    "        }\n" +
+                    "        .container {\n" +
+                    "            background: white;\n" +
+                    "            border-radius: 20px;\n" +
+                    "            box-shadow: 0 20px 60px rgba(0,0,0,0.15);\n" +
+                    "            max-width: 500px;\n" +
+                    "            width: 100%;\n" +
+                    "            padding: 50px 40px;\n" +
+                    "            text-align: center;\n" +
+                    "            animation: fadeIn 0.6s ease;\n" +
+                    "        }\n" +
+                    "        @keyframes fadeIn {\n" +
+                    "            from { opacity: 0; transform: translateY(30px); }\n" +
+                    "            to { opacity: 1; transform: translateY(0); }\n" +
+                    "        }\n" +
+                    "        .icon {\n" +
+                    "            width: 100px;\n" +
+                    "            height: 100px;\n" +
+                    "            background: linear-gradient(135deg, #43a047, #2e7d32);\n" +
+                    "            border-radius: 50%;\n" +
+                    "            display: flex;\n" +
+                    "            align-items: center;\n" +
+                    "            justify-content: center;\n" +
+                    "            margin: 0 auto 25px;\n" +
+                    "            animation: bounce 0.8s ease;\n" +
+                    "        }\n" +
+                    "        @keyframes bounce {\n" +
+                    "            0% { transform: scale(0); }\n" +
+                    "            50% { transform: scale(1.15); }\n" +
+                    "            70% { transform: scale(0.95); }\n" +
+                    "            100% { transform: scale(1); }\n" +
+                    "        }\n" +
+                    "        .icon .checkmark {\n" +
+                    "            color: white;\n" +
+                    "            font-size: 45px;\n" +
+                    "            line-height: 1;\n" +
+                    "        }\n" +
+                    "        h1 {\n" +
+                    "            color: #1b5e20;\n" +
+                    "            font-size: 28px;\n" +
+                    "            margin-bottom: 12px;\n" +
+                    "            font-weight: 700;\n" +
+                    "        }\n" +
+                    "        .subtitle {\n" +
+                    "            color: #2e7d32;\n" +
+                    "            font-size: 16px;\n" +
+                    "            margin-bottom: 8px;\n" +
+                    "        }\n" +
+                    "        .message {\n" +
+                    "            color: #555;\n" +
+                    "            font-size: 15px;\n" +
+                    "            line-height: 1.6;\n" +
+                    "            margin: 20px 0 30px;\n" +
+                    "            padding: 0 10px;\n" +
+                    "        }\n" +
+                    "        .divider {\n" +
+                    "            width: 60px;\n" +
+                    "            height: 3px;\n" +
+                    "            background: linear-gradient(90deg, #43a047, #66bb6a);\n" +
+                    "            border-radius: 3px;\n" +
+                    "            margin: 0 auto 25px;\n" +
+                    "        }\n" +
+                    "        .footer {\n" +
+                    "            color: #999;\n" +
+                    "            font-size: 13px;\n" +
+                    "            margin-top: 10px;\n" +
+                    "            border-top: 1px solid #eee;\n" +
+                    "            padding-top: 20px;\n" +
+                    "        }\n" +
+                    "        .footer strong {\n" +
+                    "            color: #2e7d32;\n" +
+                    "        }\n" +
+                    "        .btn-home {\n" +
+                    "            display: inline-block;\n" +
+                    "            background: #2e7d32;\n" +
+                    "            color: white;\n" +
+                    "            padding: 12px 35px;\n" +
+                    "            border-radius: 50px;\n" +
+                    "            text-decoration: none;\n" +
+                    "            font-weight: 600;\n" +
+                    "            font-size: 15px;\n" +
+                    "            transition: background 0.3s ease;\n" +
+                    "            margin-top: 5px;\n" +
+                    "        }\n" +
+                    "        .btn-home:hover {\n" +
+                    "            background: #1b5e20;\n" +
+                    "        }\n" +
+                    "    </style>\n" +
+                    "</head>\n" +
+                    "<body>\n" +
+                    "    <div class=\"container\">\n" +
+                    "        <div class=\"icon\">\n" +
+                    "            <span class=\"checkmark\">✓</span>\n" +
+                    "        </div>\n" +
+                    "        <h1>Visite confirmée !</h1>\n" +
+                    "        <p class=\"subtitle\">✅ Votre réponse a bien été enregistrée</p>\n" +
+                    "        <div class=\"divider\"></div>\n" +
+                    "        <p class=\"message\">\n" +
+                    "            Merci d'avoir confirmé votre disponibilité.<br>\n" +
+                    "            Notre équipe vous contactera prochainement pour organiser la visite.\n" +
+                    "        </p>\n" +
+                    "        <a href=\"https://rms.ma\" class=\"btn-home\">Retour au site</a>\n" +
+                    "        <div class=\"footer\">\n" +
+                    "            <strong>RMS</strong> &mdash; Systèmes de Pointage<br>\n" +
+                    "            <span style=\"font-size: 12px; color: #bbb;\">&copy; 2026 Tous droits réservés</span>\n" +
+                    "        </div>\n" +
+                    "    </div>\n" +
+                    "</body>\n" +
+                    "</html>";
+        } else {
+            return "<!DOCTYPE html>\n" +
+                    "<html lang=\"fr\">\n" +
+                    "<head>\n" +
+                    "    <meta charset=\"UTF-8\">\n" +
+                    "    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n" +
+                    "    <title>RMS - Confirmation</title>\n" +
+                    "    <style>\n" +
+                    "        * { margin: 0; padding: 0; box-sizing: border-box; }\n" +
+                    "        body {\n" +
+                    "            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;\n" +
+                    "            background: linear-gradient(135deg, #fbe9e7 0%, #ffcdd2 100%);\n" +
+                    "            min-height: 100vh;\n" +
+                    "            display: flex;\n" +
+                    "            justify-content: center;\n" +
+                    "            align-items: center;\n" +
+                    "            padding: 20px;\n" +
+                    "        }\n" +
+                    "        .container {\n" +
+                    "            background: white;\n" +
+                    "            border-radius: 20px;\n" +
+                    "            box-shadow: 0 20px 60px rgba(0,0,0,0.15);\n" +
+                    "            max-width: 500px;\n" +
+                    "            width: 100%;\n" +
+                    "            padding: 50px 40px;\n" +
+                    "            text-align: center;\n" +
+                    "            animation: fadeIn 0.6s ease;\n" +
+                    "        }\n" +
+                    "        @keyframes fadeIn {\n" +
+                    "            from { opacity: 0; transform: translateY(30px); }\n" +
+                    "            to { opacity: 1; transform: translateY(0); }\n" +
+                    "        }\n" +
+                    "        .icon {\n" +
+                    "            width: 100px;\n" +
+                    "            height: 100px;\n" +
+                    "            background: linear-gradient(135deg, #e53935, #c62828);\n" +
+                    "            border-radius: 50%;\n" +
+                    "            display: flex;\n" +
+                    "            align-items: center;\n" +
+                    "            justify-content: center;\n" +
+                    "            margin: 0 auto 25px;\n" +
+                    "            animation: bounce 0.8s ease;\n" +
+                    "        }\n" +
+                    "        @keyframes bounce {\n" +
+                    "            0% { transform: scale(0); }\n" +
+                    "            50% { transform: scale(1.15); }\n" +
+                    "            70% { transform: scale(0.95); }\n" +
+                    "            100% { transform: scale(1); }\n" +
+                    "        }\n" +
+                    "        .icon .cross {\n" +
+                    "            color: white;\n" +
+                    "            font-size: 45px;\n" +
+                    "            line-height: 1;\n" +
+                    "        }\n" +
+                    "        h1 {\n" +
+                    "            color: #b71c1c;\n" +
+                    "            font-size: 28px;\n" +
+                    "            margin-bottom: 12px;\n" +
+                    "            font-weight: 700;\n" +
+                    "        }\n" +
+                    "        .subtitle {\n" +
+                    "            color: #c62828;\n" +
+                    "            font-size: 16px;\n" +
+                    "            margin-bottom: 8px;\n" +
+                    "        }\n" +
+                    "        .message {\n" +
+                    "            color: #555;\n" +
+                    "            font-size: 15px;\n" +
+                    "            line-height: 1.6;\n" +
+                    "            margin: 20px 0 30px;\n" +
+                    "            padding: 0 10px;\n" +
+                    "        }\n" +
+                    "        .divider {\n" +
+                    "            width: 60px;\n" +
+                    "            height: 3px;\n" +
+                    "            background: linear-gradient(90deg, #e53935, #ef5350);\n" +
+                    "            border-radius: 3px;\n" +
+                    "            margin: 0 auto 25px;\n" +
+                    "        }\n" +
+                    "        .footer {\n" +
+                    "            color: #999;\n" +
+                    "            font-size: 13px;\n" +
+                    "            margin-top: 10px;\n" +
+                    "            border-top: 1px solid #eee;\n" +
+                    "            padding-top: 20px;\n" +
+                    "        }\n" +
+                    "        .footer strong {\n" +
+                    "            color: #c62828;\n" +
+                    "        }\n" +
+                    "        .btn-home {\n" +
+                    "            display: inline-block;\n" +
+                    "            background: #c62828;\n" +
+                    "            color: white;\n" +
+                    "            padding: 12px 35px;\n" +
+                    "            border-radius: 50px;\n" +
+                    "            text-decoration: none;\n" +
+                    "            font-weight: 600;\n" +
+                    "            font-size: 15px;\n" +
+                    "            transition: background 0.3s ease;\n" +
+                    "            margin-top: 5px;\n" +
+                    "        }\n" +
+                    "        .btn-home:hover {\n" +
+                    "            background: #b71c1c;\n" +
+                    "        }\n" +
+                    "    </style>\n" +
+                    "</head>\n" +
+                    "<body>\n" +
+                    "    <div class=\"container\">\n" +
+                    "        <div class=\"icon\">\n" +
+                    "            <span class=\"cross\">✕</span>\n" +
+                    "        </div>\n" +
+                    "        <h1>Visite refusée</h1>\n" +
+                    "        <p class=\"subtitle\">❌ Votre réponse a bien été enregistrée</p>\n" +
+                    "        <div class=\"divider\"></div>\n" +
+                    "        <p class=\"message\">\n" +
+                    "            Nous avons bien pris en compte votre refus.<br>\n" +
+                    "            Une nouvelle proposition de date vous sera envoyée prochainement.\n" +
+                    "        </p>\n" +
+                    "        <a href=\"https://rms.ma\" class=\"btn-home\">Retour au site</a>\n" +
+                    "        <div class=\"footer\">\n" +
+                    "            <strong>RMS</strong> &mdash; Systèmes de Pointage<br>\n" +
+                    "            <span style=\"font-size: 12px; color: #bbb;\">&copy; 2026 Tous droits réservés</span>\n" +
+                    "        </div>\n" +
+                    "    </div>\n" +
+                    "</body>\n" +
+                    "</html>";
+        }
+    }
+
+    private String buildErrorHtmlResponse(String error) {
+        return "<!DOCTYPE html>\n" +
+                "<html lang=\"fr\">\n" +
+                "<head>\n" +
+                "    <meta charset=\"UTF-8\">\n" +
+                "    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n" +
+                "    <title>RMS - Erreur</title>\n" +
+                "    <style>\n" +
+                "        * { margin: 0; padding: 0; box-sizing: border-box; }\n" +
+                "        body {\n" +
+                "            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;\n" +
+                "            background: linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%);\n" +
+                "            min-height: 100vh;\n" +
+                "            display: flex;\n" +
+                "            justify-content: center;\n" +
+                "            align-items: center;\n" +
+                "            padding: 20px;\n" +
+                "        }\n" +
+                "        .container {\n" +
+                "            background: white;\n" +
+                "            border-radius: 20px;\n" +
+                "            box-shadow: 0 20px 60px rgba(0,0,0,0.15);\n" +
+                "            max-width: 500px;\n" +
+                "            width: 100%;\n" +
+                "            padding: 50px 40px;\n" +
+                "            text-align: center;\n" +
+                "            animation: fadeIn 0.6s ease;\n" +
+                "        }\n" +
+                "        @keyframes fadeIn {\n" +
+                "            from { opacity: 0; transform: translateY(30px); }\n" +
+                "            to { opacity: 1; transform: translateY(0); }\n" +
+                "        }\n" +
+                "        .icon {\n" +
+                "            width: 100px;\n" +
+                "            height: 100px;\n" +
+                "            background: linear-gradient(135deg, #f57c00, #ef6c00);\n" +
+                "            border-radius: 50%;\n" +
+                "            display: flex;\n" +
+                "            align-items: center;\n" +
+                "            justify-content: center;\n" +
+                "            margin: 0 auto 25px;\n" +
+                "        }\n" +
+                "        .icon span { color: white; font-size: 45px; }\n" +
+                "        h1 { color: #e65100; font-size: 28px; margin-bottom: 12px; }\n" +
+                "        .message { color: #555; font-size: 15px; line-height: 1.6; margin: 20px 0; }\n" +
+                "        .footer { color: #999; font-size: 13px; margin-top: 10px; border-top: 1px solid #eee; padding-top: 20px; }\n" +
+                "        .btn-home {\n" +
+                "            display: inline-block;\n" +
+                "            background: #e65100;\n" +
+                "            color: white;\n" +
+                "            padding: 12px 35px;\n" +
+                "            border-radius: 50px;\n" +
+                "            text-decoration: none;\n" +
+                "            font-weight: 600;\n" +
+                "            font-size: 15px;\n" +
+                "            transition: background 0.3s ease;\n" +
+                "            margin-top: 5px;\n" +
+                "        }\n" +
+                "        .btn-home:hover { background: #bf360c; }\n" +
+                "    </style>\n" +
+                "</head>\n" +
+                "<body>\n" +
+                "    <div class=\"container\">\n" +
+                "        <div class=\"icon\"><span>⚠</span></div>\n" +
+                "        <h1>Une erreur est survenue</h1>\n" +
+                "        <p class=\"message\">" + error + "</p>\n" +
+                "        <a href=\"https://rms.ma\" class=\"btn-home\">Retour au site</a>\n" +
+                "        <div class=\"footer\">\n" +
+                "            <strong>RMS</strong> &mdash; Systèmes de Pointage<br>\n" +
+                "            <span style=\"font-size: 12px; color: #bbb;\">&copy; 2026 Tous droits réservés</span>\n" +
+                "        </div>\n" +
+                "    </div>\n" +
+                "</body>\n" +
+                "</html>";
     }
 }

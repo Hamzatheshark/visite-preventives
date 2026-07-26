@@ -89,4 +89,11 @@ public interface PlanningRepository extends JpaRepository<Planning, Integer> {
             "LEFT JOIN FETCH p.responsable " +
             "WHERE p.id = :id")
     Optional<Planning> findByIdWithDetails(@Param("id") Integer id);
+
+    // repository/PlanningRepository.java - Ajouter
+    @Query("SELECT p FROM Planning p WHERE p.responsable IS NULL")
+    List<Planning> findByResponsableIsNull();
+
+    List<Planning> findByTechnicien(Utilisateur technicien);
+    List<Planning> findByResponsable(Utilisateur responsable);
 }

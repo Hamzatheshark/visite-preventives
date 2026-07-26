@@ -1,3 +1,4 @@
+// model/Site.java - Vérifier qu'il n'y a PAS de relation avec Adresse
 package com.example.visite.model;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;

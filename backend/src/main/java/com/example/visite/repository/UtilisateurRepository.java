@@ -2,6 +2,7 @@ package com.example.visite.repository;
 
 import com.example.visite.model.Utilisateur;
 import org.springframework.data.jpa.repository.JpaRepository;
+import com.example.visite.model.enums.RoleUtilisateur;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -27,6 +28,8 @@ public interface UtilisateurRepository extends JpaRepository<Utilisateur, Intege
 
     @Query("SELECT u FROM Utilisateur u WHERE u.role = 'ADMIN' AND u.actif = true")
     List<Utilisateur> findAdminsActifs();
+
+    List<Utilisateur> findByRole(RoleUtilisateur role);
 
     boolean existsByEmail(String email);
 }

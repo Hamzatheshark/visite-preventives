@@ -7,7 +7,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @RestController
@@ -30,7 +32,6 @@ public class UtilisateurController {
     public ResponseEntity<List<Utilisateur>> getTechniciens() {
         log.info("🔍 Recherche des techniciens actifs...");
 
-        // ✅ IGNORER findTechniciensActifs() et utiliser findAll() + filtre
         List<Utilisateur> allUsers = utilisateurRepository.findAll();
         log.info("📋 {} utilisateurs trouvés au total", allUsers.size());
 
@@ -46,7 +47,6 @@ public class UtilisateurController {
 
         log.info("✅ {} technicien(s) trouvé(s)", techniciens.size());
 
-        // ✅ Afficher les techniciens trouvés dans les logs
         for (Utilisateur u : techniciens) {
             log.info("   - ID: {}, Nom: {}, Prénom: {}, Rôle: {}",
                     u.getId(), u.getNom(), u.getPrenom(), u.getRole());
@@ -59,7 +59,6 @@ public class UtilisateurController {
     public ResponseEntity<List<Utilisateur>> getResponsables() {
         log.info("🔍 Recherche des responsables actifs...");
 
-        // ✅ IGNORER findResponsablesActifs() et utiliser findAll() + filtre
         List<Utilisateur> allUsers = utilisateurRepository.findAll();
 
         List<Utilisateur> responsables = allUsers.stream()
@@ -79,5 +78,53 @@ public class UtilisateurController {
         }
 
         return ResponseEntity.ok(responsables);
+    }
+
+    // ✅ NOUVEL ENDPOINT - Vérifier le rôle d'un utilisateur
+    @GetMapping("/{id}/role")
+    public ResponseEntity<Map<String, Object>> getUserRole(@PathVariable Integer id) {
+        try {
+            log.info("🔍 Vérification du rôle pour l'utilisateur ID: {}", id);
+
+            Utilisateur user = utilisateurRepository.findById(id)
+                    .orElseThrow(() -> new RuntimeException("Utilisateur non trouvé"));
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("id", user.getId());
+            response.put("nom", user.getNom());
+            response.put("prenom", user.getPrenom());
+            response.put("email", user.getEmail());
+            response.put("role", user.getRole() != null ? user.getRole().name() : null);
+            response.put("isResponsable", user.getRole() != null &&
+                    user.getRole().name().equals("RESPONSABLE_SOFTWARE"));
+            response.put("isTechnicien", user.getRole() != null &&
+                    (user.getRole().name().equals("TECHNICIEN_HARDWARE") ||
+                            user.getRole().name().equals("TECHNICEN_HARDWARE")));
+            response.put("actif", user.getActif());
+            response.put("telephone", user.getTelephone());
+
+            log.info("📋 Utilisateur {} {}: rôle = {}, actif = {}",
+                    user.getPrenom(), user.getNom(), user.getRole(), user.getActif());
+
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            log.error("❌ Erreur lors de la récupération du rôle: {}", e.getMessage());
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("error", e.getMessage());
+            return ResponseEntity.internalServerError().body(errorResponse);
+        }
+    }
+
+    // ✅ NOUVEL ENDPOINT - Récupérer un utilisateur par ID
+    @GetMapping("/{id}")
+    public ResponseEntity<Utilisateur> getUtilisateurById(@PathVariable Integer id) {
+        try {
+            Utilisateur user = utilisateurRepository.findById(id)
+                    .orElseThrow(() -> new RuntimeException("Utilisateur non trouvé"));
+            return ResponseEntity.ok(user);
+        } catch (Exception e) {
+            log.error("❌ Erreur: {}", e.getMessage());
+            return ResponseEntity.notFound().build();
+        }
     }
 }

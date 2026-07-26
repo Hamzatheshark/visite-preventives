@@ -1,44 +1,48 @@
+// model/PieceIntervention.java - Version complète pour H2
 package com.example.visite.model;
 
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.*;
+import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import lombok.AllArgsConstructor;
+import org.hibernate.annotations.CreationTimestamp;
 
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "PieceIntervention")
+@Table(name = "piece_intervention")
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-@JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
 public class PieceIntervention {
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Integer id;
 
-    @OneToOne(fetch = FetchType.LAZY)
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "planning_id", nullable = false)
-    @JsonIgnoreProperties({"hibernateLazyInitializer", "handler", "pieceIntervention"})
     private Planning planning;
 
-    @Column(name = "nom_fichier", nullable = false)
+    @Column(name = "nom_fichier", nullable = false, length = 255)
     private String nomFichier;
 
-    @Column(name = "chemin_fichier", nullable = false)
+    @Column(name = "chemin_fichier", nullable = false, length = 500)
     private String cheminFichier;
 
-    @Column(name = "type_fichier")
+    @Column(name = "type_fichier", length = 100)
     private String typeFichier;
 
-    @Column(name = "taille_fichier")
-    private Long tailleFichier;
+    @Column(name = "taille")
+    private Long taille;
+
+    @Column(name = "description", columnDefinition = "TEXT")
+    private String description;
 
     @Column(name = "date_upload", nullable = false)
-    private LocalDateTime dateUpload = LocalDateTime.now();
+    @CreationTimestamp
+    private LocalDateTime dateUpload;
 
-    @Column(columnDefinition = "TEXT")
-    private String description;
+    @Column(name = "upload_par", length = 255)
+    private String uploadPar;
 }

@@ -4,7 +4,7 @@ import com.example.visite.model.Planning;
 import com.example.visite.model.enums.StatutVisite;
 import com.example.visite.repository.PlanningRepository;
 import com.example.visite.service.EmailInboxService;
-import com.example.visite.service.PlanningAutomatiqueService;
+import com.example.visite.service.PlanningService; // ✅ IMPORTER PlanningService
 import jakarta.mail.*;
 import jakarta.mail.internet.InternetAddress;
 import lombok.RequiredArgsConstructor;
@@ -14,7 +14,6 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Properties;
 import java.util.regex.Matcher;
@@ -26,7 +25,7 @@ import java.util.regex.Pattern;
 public class EmailInboxServiceImpl implements EmailInboxService {
 
     private final PlanningRepository planningRepository;
-    private final PlanningAutomatiqueService planningAutomatiqueService;
+    private final PlanningService planningService; // ✅ Remplacer PlanningAutomatiqueService par PlanningService
 
     @Value("${spring.mail.username}")
     private String emailUsername;
@@ -227,16 +226,11 @@ public class EmailInboxServiceImpl implements EmailInboxService {
                 return false;
             }
 
-            // ✅ Traiter la réponse
-            boolean result = planningAutomatiqueService.traiterReponseClient(planning.getId(), accepte);
+            // ✅ Traiter la réponse avec PlanningService
+            planningService.traiterReponseClient(planning.getId(), accepte);
 
-            if (result) {
-                log.info("✅ Réponse client traitée avec succès pour la visite {}", planning.getNumVisite());
-                return true;
-            } else {
-                log.warn("⚠️ Échec du traitement de la réponse pour la visite {}", planning.getNumVisite());
-                return false;
-            }
+            log.info("✅ Réponse client traitée avec succès pour la visite {}", planning.getNumVisite());
+            return true;
 
         } catch (Exception e) {
             log.error("❌ Erreur lors du traitement de l'email: {}", e.getMessage(), e);

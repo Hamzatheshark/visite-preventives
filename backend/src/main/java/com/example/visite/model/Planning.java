@@ -9,6 +9,8 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList; // ✅ AJOUTER
+import java.util.List;     // ✅ AJOUTER
 
 @Entity
 @Table(name = "Planning")
@@ -59,14 +61,12 @@ public class Planning {
     @Column(name = "date_relance")
     private LocalDateTime dateRelance;
 
-    // ✅ CHANGER LAZY EN EAGER
-    @ManyToOne(fetch = FetchType.EAGER)  // ← MODIFIÉ
+    @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "technicien_id")
     @JsonIgnoreProperties({"hibernateLazyInitializer", "handler", "visitesTechnicien"})
     private Utilisateur technicien;
 
-    // ✅ CHANGER LAZY EN EAGER
-    @ManyToOne(fetch = FetchType.EAGER)  // ← MODIFIÉ
+    @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "responsable_id")
     @JsonIgnoreProperties({"hibernateLazyInitializer", "handler", "visitesResponsable"})
     private Utilisateur responsable;
@@ -80,4 +80,13 @@ public class Planning {
     @OneToOne(mappedBy = "planning", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
     private PieceIntervention pieceIntervention;
+
+    // ✅ AJOUTER LA RELATION AVEC LIST
+    @OneToMany(mappedBy = "planning", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
+    private List<PieceIntervention> piecesIntervention = new ArrayList<>();
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "tournee_id")
+    private Tournee tournee;
 }
