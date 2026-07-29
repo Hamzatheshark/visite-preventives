@@ -1,4 +1,4 @@
-// controller/PlanningController.java - COMPLET
+// controller/PlanningController.java - COMPLET AVEC IMPORTS
 package com.example.visite.controller;
 
 import com.example.visite.model.Planning;
@@ -13,7 +13,10 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
+import java.util.ArrayList;      // ✅ AJOUTER
+import java.util.HashMap;        // ✅ AJOUTER
 import java.util.List;
+import java.util.Map;            // ✅ AJOUTER
 
 @RestController
 @RequestMapping("/api/plannings")
@@ -28,7 +31,6 @@ public class PlanningController {
     // ✅ PLANIFICATION
     // ============================================================
 
-    // Planifier pour un client spécifique (toutes les visites)
     @PostMapping("/planifier-client/{clientId}")
     public ResponseEntity<String> planifierClient(@PathVariable Integer clientId) {
         try {
@@ -41,7 +43,6 @@ public class PlanningController {
         }
     }
 
-    // Planifier pour tous les clients
     @PostMapping({"/lancer-planification", "/procedure/lancer-planification"})
     public ResponseEntity<String> lancerPlanification() {
         try {
@@ -54,7 +55,6 @@ public class PlanningController {
         }
     }
 
-    // ✅ Planifier UNIQUEMENT la prochaine visite pour un client
     @PostMapping("/planifier-prochaine/{clientId}")
     public ResponseEntity<String> planifierProchaineVisite(@PathVariable Integer clientId) {
         try {
@@ -67,7 +67,6 @@ public class PlanningController {
         }
     }
 
-    // ✅ Planifier toutes les visites manquantes pour un client
     @PostMapping("/planifier-toutes/{clientId}")
     public ResponseEntity<String> planifierToutesVisites(@PathVariable Integer clientId) {
         try {
@@ -80,7 +79,6 @@ public class PlanningController {
         }
     }
 
-    // ✅ Planifier la prochaine visite pour TOUS les clients
     @PostMapping("/lancer-planification-prochaine")
     public ResponseEntity<String> lancerPlanificationProchaine() {
         try {
@@ -93,7 +91,36 @@ public class PlanningController {
         }
     }
 
-    // Envoyer une proposition
+    @PostMapping("/planifier-visite-specifique/{clientId}/{numVisite}")
+    public ResponseEntity<String> planifierVisiteSpecifique(
+            @PathVariable Integer clientId,
+            @PathVariable Integer numVisite) {
+        try {
+            log.info("📤 Planification de la visite V{} pour le client ID: {}", numVisite, clientId);
+            planningService.planifierVisiteSpecifique(clientId, numVisite);
+            return ResponseEntity.ok("Visite V" + numVisite + " planifiée avec succès");
+        } catch (Exception e) {
+            log.error("❌ Erreur: {}", e.getMessage(), e);
+            return ResponseEntity.internalServerError().body("Erreur: " + e.getMessage());
+        }
+    }
+
+    @PostMapping("/planifier-plage/{clientId}/{numVisiteDebut}/{numVisiteFin}")
+    public ResponseEntity<String> planifierPlageVisites(
+            @PathVariable Integer clientId,
+            @PathVariable Integer numVisiteDebut,
+            @PathVariable Integer numVisiteFin) {
+        try {
+            log.info("📤 Planification des visites V{} à V{} pour le client ID: {}",
+                    numVisiteDebut, numVisiteFin, clientId);
+            planningService.planifierPlageVisites(clientId, numVisiteDebut, numVisiteFin);
+            return ResponseEntity.ok("Visites V" + numVisiteDebut + " à V" + numVisiteFin + " planifiées avec succès");
+        } catch (Exception e) {
+            log.error("❌ Erreur: {}", e.getMessage(), e);
+            return ResponseEntity.internalServerError().body("Erreur: " + e.getMessage());
+        }
+    }
+
     @PostMapping("/envoyer-proposition/{planningId}")
     public ResponseEntity<String> envoyerProposition(@PathVariable Integer planningId) {
         try {
@@ -105,7 +132,6 @@ public class PlanningController {
         }
     }
 
-    // Traiter une réponse client
     @PostMapping("/reponse-client/{planningId}")
     public ResponseEntity<String> traiterReponseClient(
             @PathVariable Integer planningId,
@@ -119,7 +145,17 @@ public class PlanningController {
         }
     }
 
-    // Envoyer les relances
+    @PostMapping("/relancer/{planningId}")
+    public ResponseEntity<String> relancerVisite(@PathVariable Integer planningId) {
+        try {
+            planningService.relancerVisite(planningId);
+            return ResponseEntity.ok("Nouvelle proposition envoyée avec succès");
+        } catch (Exception e) {
+            log.error("❌ Erreur relance: {}", e.getMessage(), e);
+            return ResponseEntity.internalServerError().body("Erreur: " + e.getMessage());
+        }
+    }
+
     @PostMapping("/envoyer-relances")
     public ResponseEntity<String> envoyerRelances() {
         try {
@@ -138,7 +174,6 @@ public class PlanningController {
         }
     }
 
-    // Vérifier et mettre à jour les statuts
     @PostMapping("/verifier-statuts")
     public ResponseEntity<String> verifierStatuts() {
         try {
@@ -165,7 +200,6 @@ public class PlanningController {
         }
     }
 
-    // Assigner un technicien automatiquement
     @PostMapping("/assigner-technicien-auto/{planningId}")
     public ResponseEntity<String> assignerTechnicienAuto(@PathVariable Integer planningId) {
         try {
@@ -177,7 +211,6 @@ public class PlanningController {
         }
     }
 
-    // ✅ Annuler une visite (admin)
     @PostMapping("/annuler/{planningId}")
     public ResponseEntity<String> annulerVisite(@PathVariable Integer planningId) {
         try {
@@ -186,6 +219,64 @@ public class PlanningController {
         } catch (Exception e) {
             log.error("❌ Erreur annulation: {}", e.getMessage(), e);
             return ResponseEntity.internalServerError().body("Erreur: " + e.getMessage());
+        }
+    }
+
+    // ✅ Nettoyer les doublons de visites
+    @PostMapping("/nettoyer-doublons")
+    public ResponseEntity<String> nettoyerDoublons() {
+        try {
+            List<Planning> plannings = planningService.getAllPlannings();
+            int supprime = 0;
+            int gardes = 0;
+
+            // Grouper par (clientId, numVisite)
+            Map<String, List<Planning>> groupes = new HashMap<>();
+            for (Planning p : plannings) {
+                if (p.getSite() != null && p.getSite().getClient() != null && p.getNumVisite() != null) {
+                    String key = p.getSite().getClient().getId() + "-" + p.getNumVisite();
+                    groupes.computeIfAbsent(key, k -> new ArrayList<>()).add(p);
+                }
+            }
+
+            // Pour chaque groupe, garder le meilleur statut
+            for (Map.Entry<String, List<Planning>> entry : groupes.entrySet()) {
+                List<Planning> groupe = entry.getValue();
+                if (groupe.size() > 1) {
+                    // Trier par priorité de statut
+                    groupe.sort((a, b) -> {
+                        int prioriteA = getStatutPriorite(a.getStatut());
+                        int prioriteB = getStatutPriorite(b.getStatut());
+                        return Integer.compare(prioriteA, prioriteB);
+                    });
+
+                    // Garder le premier, supprimer les autres
+                    for (int i = 1; i < groupe.size(); i++) {
+                        planningService.deletePlanning(groupe.get(i).getId());
+                        supprime++;
+                    }
+                    gardes++;
+                }
+            }
+
+            return ResponseEntity.ok(supprime + " doublon(s) supprimé(s), " + gardes + " groupe(s) traités");
+        } catch (Exception e) {
+            log.error("❌ Erreur: {}", e.getMessage(), e);
+            return ResponseEntity.internalServerError().body("Erreur: " + e.getMessage());
+        }
+    }
+
+    private int getStatutPriorite(StatutVisite statut) {
+        if (statut == null) return 10;
+        switch (statut) {
+            case ACCEPTE: return 1;
+            case CONFIRME: return 2;
+            case REALISE: return 3;
+            case EN_ATTENTE: return 4;
+            case RELANCE: return 5;
+            case REFUSE: return 6;
+            case ANNULE: return 7;
+            default: return 8;
         }
     }
 
@@ -355,13 +446,10 @@ public class PlanningController {
         }
     }
 
-    // ✅ Marquer qu'une PI a été attachée (pour l'historique)
     @PostMapping("/{planningId}/marquer-pi")
     public ResponseEntity<Void> marquerPI(@PathVariable Integer planningId) {
         try {
             Planning planning = planningService.getPlanningById(planningId);
-            // La PI est déjà attachée via PieceIntervention
-            // On vérifie juste qu'elle existe
             if (planning.getPieceIntervention() != null) {
                 log.info("✅ PI vérifiée pour la visite V{}", planning.getNumVisite());
                 return ResponseEntity.ok().build();
@@ -372,6 +460,20 @@ public class PlanningController {
         } catch (Exception e) {
             log.error("❌ Erreur: {}", e.getMessage(), e);
             return ResponseEntity.internalServerError().build();
+        }
+    }
+
+    // controller/PlanningController.java - AJOUTER cette méthode
+
+    @PostMapping("/planifier-par-zone")
+    public ResponseEntity<String> planifierParZone() {
+        try {
+            log.info("📍 Planification des visites par zone géographique");
+            planningService.planifierVisitesParZone();
+            return ResponseEntity.ok("✅ Planification par zone effectuée avec succès !");
+        } catch (Exception e) {
+            log.error("❌ Erreur: {}", e.getMessage(), e);
+            return ResponseEntity.internalServerError().body("Erreur: " + e.getMessage());
         }
     }
 }

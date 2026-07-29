@@ -1,4 +1,4 @@
-// service/HolidayService.java
+// service/HolidayService.java - COMPLET CORRIGÉ
 package com.example.visite.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -23,6 +23,19 @@ public class HolidayService {
 
     private final HttpClient httpClient = HttpClient.newHttpClient();
     private final ObjectMapper objectMapper = new ObjectMapper();
+
+    /**
+     * Classe interne pour les périodes
+     */
+    public static class Period {
+        public int moisDebut;
+        public int moisFin;
+
+        public Period(int moisDebut, int moisFin) {
+            this.moisDebut = moisDebut;
+            this.moisFin = moisFin;
+        }
+    }
 
     /**
      * Récupérer les jours fériés depuis l'API (Maroc)
@@ -133,5 +146,81 @@ public class HolidayService {
         }
 
         return date;
+    }
+
+    /**
+     * Trouver la prochaine date valide dans une période donnée
+     * ✅ CORRIGÉE : Utilise isValidDateForVisit qui exclut août
+     */
+    public LocalDate findNextValidDateInPeriod(LocalDate date, int moisDebut, int moisFin) {
+        LocalDate candidate = date;
+        int maxAttempts = 365;
+
+        while (maxAttempts > 0) {
+            int mois = candidate.getMonthValue();
+
+            // Vérifier que le mois est dans la période
+            if (mois >= moisDebut && mois <= moisFin) {
+                // ✅ Utilise isValidDateForVisit (exclut août, week-ends, jours fériés)
+                if (isValidDateForVisit(candidate)) {
+                    return candidate;
+                }
+            }
+            candidate = candidate.plusDays(1);
+            maxAttempts--;
+        }
+
+        return date;
+    }
+
+    /**
+     * Trouver la prochaine date valide dans une période donnée
+     * ✅ Version spéciale pour V3 qui exclut AOUT explicitement
+     */
+    public LocalDate findNextValidDateInPeriodExcludingAugust(LocalDate date, int moisDebut, int moisFin) {
+        LocalDate candidate = date;
+        int maxAttempts = 365;
+
+        while (maxAttempts > 0) {
+            int mois = candidate.getMonthValue();
+
+            // Vérifier que le mois est dans la période
+            if (mois >= moisDebut && mois <= moisFin) {
+                // ✅ Exclure AOUT explicitement
+                if (mois != 8 && isValidDateForVisit(candidate)) {
+                    return candidate;
+                }
+            }
+            candidate = candidate.plusDays(1);
+            maxAttempts--;
+        }
+
+        return date;
+    }
+
+    /**
+     * Obtenir la période pour un numéro de visite
+     * V1: Janv-Mars (1-3)
+     * V2: Avril-Juin (4-6)
+     * V3: Juillet-Septembre (7-9) - Août exclu
+     * V4: Octobre-Décembre (10-12)
+     */
+    public Period getPeriodForVisite(int numVisite, int nbVisitesAn) {
+        if (nbVisitesAn == 4) {
+            switch (numVisite) {
+                case 1: return new Period(1, 3);   // Janvier - Mars
+                case 2: return new Period(4, 6);   // Avril - Juin
+                case 3: return new Period(7, 9);   // Juillet - Septembre (Août exclu)
+                case 4: return new Period(10, 12); // Octobre - Décembre
+                default: return new Period(1, 12);
+            }
+        } else if (nbVisitesAn == 2) {
+            switch (numVisite) {
+                case 1: return new Period(1, 6);   // Janvier - Juin
+                case 2: return new Period(7, 12);  // Juillet - Décembre (Août exclu)
+                default: return new Period(1, 12);
+            }
+        }
+        return new Period(1, 12);
     }
 }

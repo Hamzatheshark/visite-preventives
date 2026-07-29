@@ -1,4 +1,3 @@
-// service/impl/PlanningServiceImpl.java - COMPLET
 package com.example.visite.service.impl;
 
 import com.example.visite.model.*;
@@ -21,9 +20,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
+import java.util.Comparator;
 import java.util.stream.Collectors;
 
 @Service
@@ -41,7 +39,7 @@ public class PlanningServiceImpl implements PlanningService {
     private final RouteOptimizationService routeOptimizationService;
     private final GeocodingService geocodingService;
     private final TourneeOptimizationService tourneeOptimizationService;
-    private final HolidayService holidayService; // ✅ AJOUTER
+    private final HolidayService holidayService;
 
     @Value("${planning.nb-relances-max:2}")
     private int nbRelancesMax;
@@ -50,13 +48,13 @@ public class PlanningServiceImpl implements PlanningService {
     private double rayonRegroupementKm;
 
     // ============================================================
-    // ✅ PLANIFICATION
+    // ✅ PLANIFICATION POUR UN CLIENT SPÉCIFIQUE
     // ============================================================
 
     @Override
     @Transactional
-    public void planifierVisitesPourClient(Integer clientId) {
-        log.info("📅 Planification pour le client ID: {}", clientId);
+    public void planifierProchaineVisite(Integer clientId) {
+        log.info("📅 Planification de la prochaine visite pour le client ID: {}", clientId);
 
         try {
             Client client = clientRepository.findById(clientId)
@@ -64,32 +62,43 @@ public class PlanningServiceImpl implements PlanningService {
 
             List<Site> sites = siteRepository.findByClientIdAndActifTrue(clientId);
             if (sites.isEmpty()) {
-                log.warn("⚠️ Aucun site actif pour le client {}", client.getNom());
                 throw new RuntimeException("Le client n'a pas de site actif");
             }
 
-            int totalCrees = 0;
+            int nbVisitesAn = client.getNbVisitesAn() != null ? client.getNbVisitesAn() : 4;
+            int anneeActuelle = LocalDate.now().getYear();
 
-            List<Contrat> contrats = contratRepository.findByClientIdAndActifTrue(clientId);
+            // ✅ Set global partagé entre TOUS les sites du client
+            Set<LocalDate> datesUtilisees = new HashSet<>();
 
-            if (!contrats.isEmpty()) {
-                log.info("📋 {} contrat(s) actif(s) trouvé(s) pour le client {}", contrats.size(), client.getNom());
-                for (Contrat contrat : contrats) {
-                    totalCrees += planifierVisitesPourContrat(contrat);
+            log.info("📌 Client: {} - {} site(s)", client.getNom(), sites.size());
+
+            // ✅ Pour CHAQUE site, planifier la prochaine visite manquante
+            for (Site site : sites) {
+                log.info("   📍 Site: {} - ID: {}", site.getNom(), site.getId());
+
+                // ✅ Récupérer les visites existantes pour CE site
+                Set<Integer> numerosExistants = getNumerosExistantsPourSite(site, anneeActuelle);
+                log.info("      📌 Visites existantes en {}: {}", anneeActuelle, numerosExistants);
+
+                // ✅ Trouver le premier numéro manquant pour CE site
+                int prochainNum = trouverProchainNumManquant(numerosExistants, nbVisitesAn);
+
+                if (prochainNum != -1) {
+                    // ✅ Planifier avec le Set partagé (évite les doublons de dates)
+                    LocalDate dateVisite = planifierVisiteAvecPeriode(site, prochainNum, anneeActuelle, datesUtilisees);
+                    if (dateVisite != null) {
+                        log.info("      ✅ V{} planifiée pour {} le {}", prochainNum, site.getNom(), dateVisite);
+                    }
+                } else {
+                    // ✅ Si tous les numéros sont pris, passer à l'année suivante
+                    log.info("      📌 Toutes les visites planifiées pour {} en {}, passage à {}",
+                            site.getNom(), anneeActuelle, anneeActuelle + 1);
+                    planifierProchaineVisitePourSiteAnnee(site, anneeActuelle + 1, datesUtilisees);
                 }
-            } else {
-                log.info("📋 Aucun contrat actif, utilisation des données du client");
-
-                Integer nbVisitesAn = client.getNbVisitesAn();
-                if (nbVisitesAn == null || nbVisitesAn <= 0) {
-                    log.warn("⚠️ Le client {} n'a pas de nombre de visites par an défini", client.getNom());
-                    throw new RuntimeException("Le client n'a pas de nombre de visites par an défini");
-                }
-
-                totalCrees = planifierVisitesPourClientSansContrat(client, sites, nbVisitesAn);
             }
 
-            log.info("✅ {} visite(s) planifiée(s) pour le client {}", totalCrees, client.getNom());
+            log.info("✅ Planification terminée pour le client {}", client.getNom());
 
         } catch (Exception e) {
             log.error("❌ Erreur lors de la planification: {}", e.getMessage(), e);
@@ -97,10 +106,273 @@ public class PlanningServiceImpl implements PlanningService {
         }
     }
 
+    // ============================================================
+    // ✅ PLANIFICATION POUR TOUS LES CLIENTS
+    // ============================================================
+
+// service/impl/PlanningServiceImpl.java - REMPLACER cette méthode
+
+    @Override
+    @Transactional
+    public int planifierProchaineVisitePourTousLesClients() {
+        log.info("📅 Planification de la prochaine visite pour tous les clients (OPTIMISÉE)");
+
+        // ✅ Utiliser la planification par zone
+        planifierVisitesParZone();
+
+        // Compter le nombre de visites créées
+        List<Planning> allPlannings = planningRepository.findAll();
+        int count = (int) allPlannings.stream()
+                .filter(p -> p.getStatut() == StatutVisite.EN_ATTENTE)
+                .count();
+
+        log.info("✅ Planification terminée: {} visites créées", count);
+        return count;
+    }
+
+    // ============================================================
+    // ✅ MÉTHODES PRINCIPALES DE PLANIFICATION
+    // ============================================================
+
+    // service/impl/PlanningServiceImpl.java - REMPLACER COMPLÈTEMENT cette méthode
+
+    @Transactional
+    private LocalDate planifierVisiteAvecPeriode(Site site, int numVisite, int annee, Set<LocalDate> datesUtilisees) {
+        log.info("📅 Planification V{} pour {} en {}", numVisite, site.getNom(), annee);
+
+        try {
+            Client client = site.getClient();
+            int nbVisitesAn = client.getNbVisitesAn() != null ? client.getNbVisitesAn() : 4;
+
+            HolidayService.Period period = holidayService.getPeriodForVisite(numVisite, nbVisitesAn);
+            log.info("   📌 Période V{}: {}-{}", numVisite, period.moisDebut, period.moisFin);
+
+            // ✅ Commencer au début de la période
+            LocalDate dateBase = LocalDate.of(annee, period.moisDebut, 1);
+
+            // ✅ Si la date est dans le passé, avancer d'un jour
+            LocalDate now = LocalDate.now();
+            if (dateBase.isBefore(now) || dateBase.isEqual(now)) {
+                dateBase = dateBase.plusDays(1);
+                log.info("   📌 Date de base ajustée: {}", dateBase);
+            }
+
+            // ✅ Récupérer les dates déjà utilisées par CE site
+            Set<LocalDate> datesSite = new HashSet<>();
+            List<Planning> planningsSite = planningRepository.findBySite(site);
+            for (Planning p : planningsSite) {
+                if (p.getDateProposee() != null && p.getStatut() != StatutVisite.ANNULE) {
+                    datesSite.add(p.getDateProposee());
+                }
+            }
+
+            // ✅ LOG DÉTAILLÉ DES DATES DÉJÀ UTILISÉES
+            log.info("   📌 Dates déjà utilisées par {}: {}", site.getNom(), datesSite);
+            log.info("   📌 Dates globales déjà utilisées: {}", datesUtilisees);
+
+            LocalDate dateValide = null;
+            int maxAttempts = 365;
+
+            for (int i = 0; i < maxAttempts; i++) {
+                LocalDate candidate = dateBase.plusDays(i);
+                int mois = candidate.getMonthValue();
+
+                // ✅ Vérifier que le mois est dans la période
+                if (mois < period.moisDebut || mois > period.moisFin) {
+                    log.debug("      📌 {}: hors période ({}-{})", candidate, period.moisDebut, period.moisFin);
+                    continue;
+                }
+
+                // ✅ Vérifier que la date est valide (pas week-end, pas férié, pas août)
+                if (!holidayService.isValidDateForVisit(candidate)) {
+                    log.debug("      📌 {}: date invalide (week-end, férié ou août)", candidate);
+                    continue;
+                }
+
+                // ✅ Vérifier que la date n'est pas déjà utilisée (GLOBAL)
+                if (datesUtilisees.contains(candidate)) {
+                    log.debug("      📌 {}: date déjà utilisée par un autre site", candidate);
+                    continue;
+                }
+
+                // ✅ Vérifier que ce site n'a pas déjà une visite à cette date
+                if (datesSite.contains(candidate)) {
+                    log.debug("      📌 {}: ce site a déjà une visite à cette date", candidate);
+                    continue;
+                }
+
+                // ✅ Date valide trouvée !
+                dateValide = candidate;
+                log.info("   ✅ Date trouvée pour {}: {}", site.getNom(), dateValide);
+                break;
+            }
+
+            if (dateValide == null) {
+                log.warn("⚠️ Aucune date trouvée pour {} V{} dans la période {}-{}",
+                        site.getNom(), numVisite, period.moisDebut, period.moisFin);
+
+                // ✅ Fallback : chercher une date dans l'année suivante
+                log.info("   🔄 Recherche dans l'année {}...", annee + 1);
+                return planifierVisiteAvecPeriode(site, numVisite, annee + 1, datesUtilisees);
+            }
+
+            // ✅ Marquer la date comme utilisée (GLOBAL)
+            datesUtilisees.add(dateValide);
+
+            // ✅ Créer la visite
+            Planning planning = new Planning();
+            planning.setSite(site);
+            planning.setContrat(null);
+            planning.setNumVisite(numVisite);
+            planning.setStatut(StatutVisite.EN_ATTENTE);
+            planning.setNbRelances(0);
+            planning.setDateEnvoi(LocalDateTime.now());
+            planning.setDateProposee(dateValide);
+            planning.setDateVisite(dateValide);
+
+            Planning saved = planningRepository.save(planning);
+
+            log.info("✅ V{} planifiée pour {} le {} (période: {}-{})",
+                    numVisite, site.getNom(), dateValide, period.moisDebut, period.moisFin);
+
+            try {
+                envoyerProposition(saved.getId());
+            } catch (Exception e) {
+                log.error("❌ Erreur envoi email: {}", e.getMessage());
+            }
+
+            return dateValide;
+
+        } catch (Exception e) {
+            log.error("❌ Erreur lors de la planification pour {}: {}", site.getNom(), e.getMessage(), e);
+            return null;
+        }
+    }
+
+    @Transactional
+    private void planifierProchaineVisitePourSiteAnnee(Site site, int annee, Set<LocalDate> datesUtilisees) {
+        log.info("📅 Planification de la prochaine visite pour {} en {}", site.getNom(), annee);
+
+        try {
+            Client client = site.getClient();
+            int nbVisitesAn = client.getNbVisitesAn() != null ? client.getNbVisitesAn() : 4;
+
+            Set<Integer> numerosExistants = getNumerosExistantsPourSite(site, annee);
+
+            int prochainNum = trouverProchainNumManquant(numerosExistants, nbVisitesAn);
+
+            if (prochainNum == -1) {
+                log.info("📌 Toutes les visites planifiées pour {} en {}, passage à {}",
+                        site.getNom(), annee, annee + 1);
+                planifierProchaineVisitePourSiteAnnee(site, annee + 1, datesUtilisees);
+                return;
+            }
+
+            LocalDate dateVisite = planifierVisiteAvecPeriode(site, prochainNum, annee, datesUtilisees);
+            if (dateVisite != null) {
+                log.info("✅ V{} planifiée pour {} le {} (année {})",
+                        prochainNum, site.getNom(), dateVisite, annee);
+            }
+
+        } catch (Exception e) {
+            log.error("❌ Erreur lors de la planification pour {}: {}", site.getNom(), e.getMessage(), e);
+            throw new RuntimeException("Erreur lors de la planification: " + e.getMessage());
+        }
+    }
+
+    // ============================================================
+    // ✅ MÉTHODES DE VÉRIFICATION
+    // ============================================================
+
+    private Set<Integer> getNumerosExistantsPourSite(Site site, int annee) {
+        Set<Integer> numeros = new HashSet<>();
+
+        List<Planning> plannings = planningRepository.findBySite(site);
+        for (Planning p : plannings) {
+            if (p.getNumVisite() != null && p.getStatut() != StatutVisite.ANNULE) {
+                if (p.getDateProposee() != null && p.getDateProposee().getYear() == annee) {
+                    numeros.add(p.getNumVisite());
+                }
+            }
+        }
+
+        return numeros;
+    }
+
+    private int trouverProchainNumManquant(Set<Integer> numerosExistants, int nbVisitesAn) {
+        for (int i = 1; i <= nbVisitesAn; i++) {
+            if (!numerosExistants.contains(i)) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    private String extractVille(String adresse) {
+        if (adresse == null || adresse.isEmpty()) {
+            return "Inconnu";
+        }
+        String[] parts = adresse.split(",");
+        if (parts.length >= 2) {
+            String ville = parts[parts.length - 1].trim();
+            ville = ville.replaceAll("\\d{5}", "").trim();
+            if (!ville.isEmpty()) {
+                return ville;
+            }
+        }
+        return adresse.substring(0, Math.min(20, adresse.length()));
+    }
+
+    // ============================================================
+    // ✅ AUTRES MÉTHODES DE PLANIFICATION
+    // ============================================================
+
+    @Override
+    @Transactional
+    public void planifierVisitesPourClient(Integer clientId) {
+        log.info("📅 Planification complète pour le client ID: {}", clientId);
+
+        try {
+            Client client = clientRepository.findById(clientId)
+                    .orElseThrow(() -> new RuntimeException("Client non trouvé"));
+
+            List<Site> sites = siteRepository.findByClientIdAndActifTrue(clientId);
+            if (sites.isEmpty()) {
+                throw new RuntimeException("Le client n'a pas de site actif");
+            }
+
+            int nbVisitesAn = client.getNbVisitesAn() != null ? client.getNbVisitesAn() : 4;
+            int anneeActuelle = LocalDate.now().getYear();
+
+            // ✅ Set global partagé entre TOUS les sites du client
+            Set<LocalDate> datesUtilisees = new HashSet<>();
+
+            log.info("📌 Client: {} - {} site(s) - {} visites/an",
+                    client.getNom(), sites.size(), nbVisitesAn);
+
+            for (Site site : sites) {
+                log.info("   📍 Site: {} - ID: {}", site.getNom(), site.getId());
+
+                for (int numVisite = 1; numVisite <= nbVisitesAn; numVisite++) {
+                    // ✅ Planifier avec le Set partagé
+                    LocalDate dateVisite = planifierVisiteAvecPeriode(site, numVisite, anneeActuelle, datesUtilisees);
+                    if (dateVisite != null) {
+                        log.info("      ✅ V{} planifiée pour {} le {}", numVisite, site.getNom(), dateVisite);
+                    }
+                }
+            }
+
+            log.info("✅ Planification complète terminée pour le client {}", client.getNom());
+
+        } catch (Exception e) {
+            log.error("❌ Erreur lors de la planification: {}", e.getMessage(), e);
+            throw new RuntimeException("Erreur lors de la planification: " + e.getMessage());
+        }
+    }
     @Override
     @Transactional
     public int planifierVisitesPourTousLesClients() {
-        log.info("📅 Planification pour tous les clients");
+        log.info("📅 Planification complète pour tous les clients");
 
         List<Client> clients = clientRepository.findByActifTrue();
         int totalCrees = 0;
@@ -118,60 +390,6 @@ public class PlanningServiceImpl implements PlanningService {
         return totalCrees;
     }
 
-    // ✅ PLANIFIER UNIQUEMENT LA PROCHAINE VISITE
-    @Override
-    @Transactional
-    public void planifierProchaineVisite(Integer clientId) {
-        log.info("📅 Planification de la prochaine visite pour le client ID: {}", clientId);
-
-        try {
-            Client client = clientRepository.findById(clientId)
-                    .orElseThrow(() -> new RuntimeException("Client non trouvé"));
-
-            List<Site> sites = siteRepository.findByClientIdAndActifTrue(clientId);
-            if (sites.isEmpty()) {
-                throw new RuntimeException("Le client n'a pas de site actif");
-            }
-
-            int prochainNumVisite = getProchainNumVisite(clientId, sites);
-
-            int nbVisitesAn = client.getNbVisitesAn() != null ? client.getNbVisitesAn() : 4;
-            if (prochainNumVisite > nbVisitesAn) {
-                log.warn("⚠️ Client {} a déjà {} visites, maximum atteint", client.getNom(), nbVisitesAn);
-                throw new RuntimeException("Toutes les visites de l'année sont déjà planifiées");
-            }
-
-            LocalDate dateProchaineVisite = calculerDateProchaineVisite(client, prochainNumVisite);
-
-            Planning planning = new Planning();
-            planning.setSite(sites.get(0));
-            planning.setContrat(null);
-            planning.setNumVisite(prochainNumVisite);
-            planning.setStatut(StatutVisite.EN_ATTENTE);
-            planning.setNbRelances(0);
-            planning.setDateEnvoi(LocalDateTime.now());
-            planning.setDateProposee(dateProchaineVisite);
-            planning.setDateVisite(dateProchaineVisite);
-
-            Planning saved = planningRepository.save(planning);
-
-            log.info("✅ Visite V{} planifiée pour le client {} le {}",
-                    prochainNumVisite, client.getNom(), dateProchaineVisite);
-
-            try {
-                envoyerProposition(saved.getId());
-                log.info("📧 Email envoyé pour la visite V{}", saved.getNumVisite());
-            } catch (Exception e) {
-                log.error("❌ Erreur lors de l'envoi de l'email: {}", e.getMessage());
-            }
-
-        } catch (Exception e) {
-            log.error("❌ Erreur lors de la planification: {}", e.getMessage(), e);
-            throw new RuntimeException("Erreur lors de la planification: " + e.getMessage());
-        }
-    }
-
-    // ✅ PLANIFIER TOUTES LES VISITES MANQUANTES
     @Override
     @Transactional
     public void planifierToutesVisitesManquantes(Integer clientId) {
@@ -182,18 +400,20 @@ public class PlanningServiceImpl implements PlanningService {
                     .orElseThrow(() -> new RuntimeException("Client non trouvé"));
 
             int nbVisitesAn = client.getNbVisitesAn() != null ? client.getNbVisitesAn() : 4;
+            int anneeActuelle = LocalDate.now().getYear();
 
-            for (int i = 1; i <= nbVisitesAn; i++) {
-                try {
-                    if (!visiteExiste(clientId, i)) {
-                        planifierProchaineVisite(clientId);
-                        log.info("✅ Visite V{} planifiée", i);
-                    } else {
-                        log.info("ℹ️ Visite V{} déjà planifiée", i);
+            List<Site> sites = siteRepository.findByClientIdAndActifTrue(clientId);
+            Set<LocalDate> datesUtilisees = new HashSet<>();
+
+            for (Site site : sites) {
+                Set<Integer> numerosExistants = getNumerosExistantsPourSite(site, anneeActuelle);
+                for (int i = 1; i <= nbVisitesAn; i++) {
+                    if (!numerosExistants.contains(i)) {
+                        LocalDate dateVisite = planifierVisiteAvecPeriode(site, i, anneeActuelle, datesUtilisees);
+                        if (dateVisite != null) {
+                            log.info("✅ V{} planifiée pour {} le {}", i, site.getNom(), dateVisite);
+                        }
                     }
-                } catch (Exception e) {
-                    log.error("❌ Erreur lors de la planification de V{}: {}", i, e.getMessage());
-                    break;
                 }
             }
 
@@ -203,181 +423,822 @@ public class PlanningServiceImpl implements PlanningService {
         }
     }
 
-    /**
-     * Planifier les visites avec un contrat
-     */
-    private int planifierVisitesPourContrat(Contrat contrat) {
-        int nbVisites = contrat.getNbVisitesAn() != null ? contrat.getNbVisitesAn() : 2;
-        int moisInterval = nbVisites == 4 ? 3 : 6;
-        LocalDate dateDebut = contrat.getDateDebut() != null ? contrat.getDateDebut() : LocalDate.now();
 
-        // Trouver la première date valide
-        dateDebut = holidayService.findNextValidDate(dateDebut);
+    // service/impl/PlanningServiceImpl.java - REMPLACER cette partie
+// service/impl/PlanningServiceImpl.java - AJOUTER un Set global
 
-        List<Site> sites = siteRepository.findByClientIdAndActifTrue(contrat.getClient().getId());
-        if (sites.isEmpty()) {
-            log.warn("⚠️ Aucun site pour le contrat {}", contrat.getId());
-            return 0;
-        }
+    // ✅ Déclarer un Set global pour suivre toutes les dates du client
+    private final Map<Integer, Set<LocalDate>> datesUtiliseesParClient = new HashMap<>();
 
-        List<Planning> plannings = new ArrayList<>();
-        for (Site site : sites) {
-            for (int i = 0; i < nbVisites; i++) {
-                Planning planning = new Planning();
-                planning.setSite(site);
-                planning.setContrat(contrat);
-                planning.setNumVisite(i + 1);
-                planning.setStatut(StatutVisite.EN_ATTENTE);
-                planning.setNbRelances(0);
-                planning.setDateEnvoi(LocalDateTime.now());
+    // service/impl/PlanningServiceImpl.java - REMPLACER COMPLÈTEMENT
 
-                LocalDate dateBase = dateDebut.plusMonths((long) i * moisInterval);
-                LocalDate dateValide = holidayService.findNextValidDate(dateBase);
-                planning.setDateProposee(dateValide);
+    @Override
+    @Transactional
+    public void planifierVisiteSpecifique(Integer clientId, Integer numVisite) {
+        log.info("📅 Planification de la visite V{} pour le client ID: {}", numVisite, clientId);
 
-                plannings.add(planning);
+        try {
+            Client client = clientRepository.findById(clientId)
+                    .orElseThrow(() -> new RuntimeException("Client non trouvé"));
+
+            int nbVisitesAn = client.getNbVisitesAn() != null ? client.getNbVisitesAn() : 4;
+            if (numVisite < 1 || numVisite > nbVisitesAn) {
+                throw new RuntimeException("Numéro de visite invalide. Le client a " + nbVisitesAn + " visites par an.");
             }
-        }
 
-        return sauvegarderPlannings(plannings, sites);
+            List<Site> sites = siteRepository.findByClientIdAndActifTrue(clientId);
+            if (sites.isEmpty()) {
+                throw new RuntimeException("Le client n'a pas de site actif");
+            }
+
+            int annee = LocalDate.now().getYear();
+
+            // ✅ Récupérer TOUTES les dates utilisées par TOUS les sites du client
+            Set<LocalDate> datesUtilisees = new HashSet<>();
+            for (Site site : sites) {
+                List<Planning> plannings = planningRepository.findBySite(site);
+                for (Planning p : plannings) {
+                    if (p.getDateProposee() != null && p.getStatut() != StatutVisite.ANNULE) {
+                        datesUtilisees.add(p.getDateProposee());
+                    }
+                }
+            }
+            log.info("📌 Toutes les dates utilisées: {}", datesUtilisees);
+
+            // ✅ Compter les visites V{numVisite} existantes
+            int countExisting = 0;
+            for (Site site : sites) {
+                if (visiteExistePourSite(site, numVisite)) {
+                    countExisting++;
+                }
+            }
+            log.info("📌 Visites V{} déjà existantes: {}", numVisite, countExisting);
+
+            // ✅ Trouver la période
+            HolidayService.Period period = holidayService.getPeriodForVisite(numVisite, nbVisitesAn);
+            log.info("📌 Période V{}: {}-{}", numVisite, period.moisDebut, period.moisFin);
+
+            // ✅ Pour CHAQUE site, planifier une date UNIQUE
+            int offset = countExisting;
+            for (Site site : sites) {
+                boolean visiteExistante = visiteExistePourSite(site, numVisite);
+
+                if (!visiteExistante) {
+                    // ✅ Chercher une date avec un offset qui s'incrémente
+                    LocalDate dateVisite = trouverDateAvecOffset(
+                            site, numVisite, annee, period, datesUtilisees, offset
+                    );
+
+                    if (dateVisite != null) {
+                        datesUtilisees.add(dateVisite);
+                        offset++;
+
+                        Planning planning = new Planning();
+                        planning.setSite(site);
+                        planning.setContrat(null);
+                        planning.setNumVisite(numVisite);
+                        planning.setStatut(StatutVisite.EN_ATTENTE);
+                        planning.setNbRelances(0);
+                        planning.setDateEnvoi(LocalDateTime.now());
+                        planning.setDateProposee(dateVisite);
+                        planning.setDateVisite(dateVisite);
+
+                        Planning saved = planningRepository.save(planning);
+                        log.info("   ✅ V{} planifiée pour {} le {}",
+                                numVisite, site.getNom(), dateVisite);
+
+                        try {
+                            envoyerProposition(saved.getId());
+                        } catch (Exception e) {
+                            log.error("❌ Erreur envoi email: {}", e.getMessage());
+                        }
+                    }
+                }
+            }
+
+            log.info("✅ Planification V{} terminée", numVisite);
+
+        } catch (Exception e) {
+            log.error("❌ Erreur: {}", e.getMessage(), e);
+            throw new RuntimeException("Erreur: " + e.getMessage());
+        }
     }
 
     /**
-     * Planifier les visites sans contrat
+     * ✅ Trouver une date avec un OFFSET qui s'incrémente
      */
-    private int planifierVisitesPourClientSansContrat(Client client, List<Site> sites, int nbVisitesAn) {
-        int moisInterval = nbVisitesAn == 4 ? 3 : 6;
-        LocalDate dateDebut = LocalDate.now().plusMonths(1);
-        dateDebut = holidayService.findNextValidDate(dateDebut);
+    private LocalDate trouverDateAvecOffset(Site site, int numVisite, int annee,
+                                            HolidayService.Period period, Set<LocalDate> datesUtilisees, int offset) {
 
-        List<Planning> plannings = new ArrayList<>();
-        for (Site site : sites) {
-            for (int i = 0; i < nbVisitesAn; i++) {
-                Planning planning = new Planning();
-                planning.setSite(site);
-                planning.setContrat(null);
-                planning.setNumVisite(i + 1);
-                planning.setStatut(StatutVisite.EN_ATTENTE);
-                planning.setNbRelances(0);
-                planning.setDateEnvoi(LocalDateTime.now());
+        log.info("🔍 Recherche V{} - {} (offset: {})", numVisite, site.getNom(), offset);
 
-                LocalDate dateBase = dateDebut.plusMonths((long) i * moisInterval);
-                LocalDate dateValide = holidayService.findNextValidDate(dateBase);
-                planning.setDateProposee(dateValide);
-
-                plannings.add(planning);
+        // ✅ Récupérer les dates du site
+        Set<LocalDate> datesSite = new HashSet<>();
+        List<Planning> planningsSite = planningRepository.findBySite(site);
+        for (Planning p : planningsSite) {
+            if (p.getDateProposee() != null && p.getStatut() != StatutVisite.ANNULE) {
+                datesSite.add(p.getDateProposee());
             }
         }
 
-        return sauvegarderPlannings(plannings, sites);
-    }
+        log.info("   📌 Dates du site {}: {}", site.getNom(), datesSite);
+        log.info("   📌 Dates globales: {}", datesUtilisees);
+        log.info("   📌 Offset: {}", offset);
 
-    /**
-     * Sauvegarder les plannings avec optimisation
-     */
-    private int sauvegarderPlannings(List<Planning> plannings, List<Site> sites) {
-        boolean hasCoordinates = sites.stream().anyMatch(s -> s.getLatitude() != null && s.getLongitude() != null);
+        // ✅ Date de départ = début de la période + offset
+        LocalDate dateCourante = LocalDate.of(annee, period.moisDebut, 1).plusDays(offset);
+        log.info("   📌 Date de départ: {}", dateCourante);
 
-        Map<LocalDate, List<Planning>> journeeMap;
+        int maxAttempts = 90;
+        for (int i = 0; i < maxAttempts; i++) {
+            LocalDate candidate = dateCourante.plusDays(i);
 
-        if (hasCoordinates && plannings.size() > 1) {
-            log.info("📍 Optimisation des tournées depuis Temara");
-            LocalDate startDate = LocalDate.now().plusDays(1);
-            journeeMap = tourneeOptimizationService.planifierTournees(plannings, startDate);
-        } else {
-            log.info("📅 Planification simple (une visite par jour)");
-            journeeMap = routeOptimizationService.planifierParJourSimple(plannings);
+            if (candidate.getYear() != annee) {
+                break;
+            }
+
+            int mois = candidate.getMonthValue();
+            if (mois < period.moisDebut || mois > period.moisFin) {
+                continue;
+            }
+
+            if (!holidayService.isValidDateForVisit(candidate)) {
+                continue;
+            }
+
+            if (datesUtilisees.contains(candidate)) {
+                log.debug("      📌 {}: déjà utilisée globalement", candidate);
+                continue;
+            }
+
+            if (datesSite.contains(candidate)) {
+                log.debug("      📌 {}: déjà utilisée par ce site", candidate);
+                continue;
+            }
+
+            log.info("   ✅ Date trouvée pour {}: {}", site.getNom(), candidate);
+            return candidate;
         }
 
-        int creees = 0;
-        for (Map.Entry<LocalDate, List<Planning>> entry : journeeMap.entrySet()) {
-            LocalDate date = entry.getKey();
-            List<Planning> planningsDuJour = entry.getValue();
+        log.warn("   ⚠️ Aucune date trouvée pour {}", site.getNom());
+        return null;
+    }
 
-            for (Planning planning : planningsDuJour) {
-                planning.setDateProposee(date);
-                planning.setDateVisite(date);
+    // service/impl/PlanningServiceImpl.java - AJOUTER cette méthode
+
+    /**
+     * ✅ Planifier les visites par zone géographique (Agadir → Marrakech → Casablanca → Rabat)
+     */
+    // service/impl/PlanningServiceImpl.java - REMPLACER COMPLÈTEMENT
+
+    // service/impl/PlanningServiceImpl.java - REMPLACER COMPLÈTEMENT cette méthode
+
+    @Transactional
+    public void planifierVisitesParZone() {
+        log.info("========================================");
+        log.info("📍 PLANIFICATION PAR ZONE GÉOGRAPHIQUE OPTIMISÉE");
+        log.info("========================================");
+
+        // ✅ 1. Récupérer toutes les visites à planifier
+        List<Client> clients = clientRepository.findByActifTrue();
+        List<Planning> tousLesPlannings = new ArrayList<>();
+        int anneeActuelle = LocalDate.now().getYear();
+
+        for (Client client : clients) {
+            if (client.getNbVisitesAn() == null || client.getNbVisitesAn() <= 0) continue;
+
+            List<Site> sites = siteRepository.findByClientIdAndActifTrue(client.getId());
+            for (Site site : sites) {
+                // Géocoder si nécessaire
+                if (site.getLatitude() == null || site.getLongitude() == null) {
+                    geocodingService.geocodeSite(site);
+                    siteRepository.save(site);
+                    log.info("📍 Site {} géocodé: lat={}, lon={}",
+                            site.getNom(), site.getLatitude(), site.getLongitude());
+                }
+
+                Set<Integer> numerosExistants = getNumerosExistantsPourSite(site, anneeActuelle);
+                int prochainNum = trouverProchainNumManquant(numerosExistants, client.getNbVisitesAn());
+
+                if (prochainNum != -1) {
+                    Planning planning = new Planning();
+                    planning.setSite(site);
+                    planning.setNumVisite(prochainNum);
+                    planning.setStatut(StatutVisite.EN_ATTENTE);
+                    planning.setNbRelances(0);
+                    planning.setDateEnvoi(LocalDateTime.now());
+                    tousLesPlannings.add(planning);
+                }
+            }
+        }
+
+        if (tousLesPlannings.isEmpty()) {
+            log.info("ℹ️ Aucune visite à planifier");
+            return;
+        }
+
+        log.info("📊 {} visite(s) à planifier", tousLesPlannings.size());
+
+        // ✅ 2. REGROUPER PAR ZONE GÉOGRAPHIQUE
+        Map<String, List<Planning>> zones = regrouperParZoneGeographique(tousLesPlannings);
+        log.info("📍 {} zones identifiées: {}", zones.size(), zones.keySet());
+
+        // ✅ 3. Définir l'ordre OPTIMAL des zones
+        // 🔥 Changement : Centre → Sud → Nord (pour éviter le grand saut)
+        List<String> ordreZones = Arrays.asList("Centre", "Sud", "Nord", "Autre");
+
+        // ✅ 4. Planifier zone par zone avec pause
+        Set<LocalDate> datesUtilisees = new HashSet<>();
+        LocalDate currentDate = LocalDate.now().plusDays(1);
+
+        for (String zone : ordreZones) {
+            if (!zones.containsKey(zone)) continue;
+
+            List<Planning> planningsZone = zones.get(zone);
+            log.info("📍 Traitement de la zone: {} - {} visite(s)", zone, planningsZone.size());
+
+            // ✅ Optimiser l'ordre des visites dans la zone
+            List<Planning> zoneOptimisee = optimiserOrdreVisites(planningsZone);
+
+            for (Planning planning : zoneOptimisee) {
+                while (!holidayService.isValidDateForVisit(currentDate) || datesUtilisees.contains(currentDate)) {
+                    currentDate = currentDate.plusDays(1);
+                }
+
+                planning.setDateProposee(currentDate);
+                planning.setDateVisite(currentDate);
+                datesUtilisees.add(currentDate);
 
                 Planning saved = planningRepository.save(planning);
-                creees++;
+                String ville = extractVille(saved.getSite().getAdresse());
 
-                String ville = planning.getSite().getAdresse() != null ?
-                        extractVille(planning.getSite().getAdresse()) : "Inconnu";
-
-                log.info("✅ Visite V{} planifiée pour le site {} ({}) le {}",
+                log.info("   ✅ V{} - {} ({}) - Date: {}",
                         saved.getNumVisite(),
-                        planning.getSite().getNom(),
+                        saved.getSite().getNom(),
                         ville,
-                        date);
+                        currentDate);
 
                 try {
                     envoyerProposition(saved.getId());
-                    log.info("📧 Email envoyé pour la visite V{}", saved.getNumVisite());
                 } catch (Exception e) {
-                    log.error("❌ Erreur lors de l'envoi de l'email: {}", e.getMessage());
+                    log.error("❌ Erreur envoi email: {}", e.getMessage());
+                }
+
+                currentDate = currentDate.plusDays(1);
+            }
+
+            // ✅ Pause de 2 jours entre les zones (pour les longs trajets)
+            currentDate = currentDate.plusDays(2);
+            log.info("   📅 Pause de 2 jours entre les zones");
+        }
+
+        log.info("========================================");
+        log.info("✅ PLANIFICATION PAR ZONE TERMINÉE");
+        log.info("========================================");
+    }
+
+    // service/impl/PlanningServiceImpl.java - AJOUTER cette méthode
+
+    /**
+     * ✅ Optimiser l'ordre des visites dans une zone (plus proche voisin)
+     */
+    private List<Planning> optimiserOrdreVisites(List<Planning> plannings) {
+        if (plannings.size() <= 1) {
+            return plannings;
+        }
+
+        List<Planning> nonVisites = new ArrayList<>(plannings);
+        List<Planning> ordreOptimise = new ArrayList<>();
+
+        // ✅ Démarrer du site le plus proche de Temara (ou du premier)
+        Planning depart = nonVisites.remove(0);
+        ordreOptimise.add(depart);
+
+        Planning dernier = depart;
+        int index = 1;
+
+        log.info("   🔍 Optimisation de l'ordre dans la zone:");
+        log.info("      Étape 0: {}", dernier.getSite().getNom());
+
+        while (!nonVisites.isEmpty()) {
+            Planning prochain = null;
+            double distanceMin = Double.MAX_VALUE;
+
+            for (Planning p : nonVisites) {
+                if (p.getSite().getLatitude() != null && dernier.getSite().getLatitude() != null) {
+                    double distance = geocodingService.calculateDistance(
+                            dernier.getSite(),
+                            p.getSite()
+                    );
+                    if (distance < distanceMin) {
+                        distanceMin = distance;
+                        prochain = p;
+                    }
                 }
             }
 
-            log.info("📅 Journée du {}: {} visite(s)", date, planningsDuJour.size());
+            if (prochain == null) {
+                prochain = nonVisites.remove(0);
+            } else {
+                nonVisites.remove(prochain);
+            }
+
+            ordreOptimise.add(prochain);
+            log.info("      Étape {}: {} → {} ({:.1f} km)",
+                    index++,
+                    dernier.getSite().getNom(),
+                    prochain.getSite().getNom(),
+                    distanceMin);
+
+            dernier = prochain;
         }
 
-        return creees;
+        return ordreOptimise;
     }
 
-    // ============================================================
-    // ✅ MÉTHODES PRIVÉES POUR LA PLANIFICATION PROGRESSIVE
-    // ============================================================
+    /**
+     * ✅ Calculer la distance moyenne d'une zone depuis Temara
+     */
+    private double getDistanceMoyenneZone(List<Planning> plannings, Site temara) {
+        if (plannings == null || plannings.isEmpty()) {
+            return 999.0;
+        }
 
-    private int getProchainNumVisite(Integer clientId, List<Site> sites) {
-        int maxNumVisite = 0;
+        double totalDistance = 0.0;
+        int count = 0;
 
-        for (Site site : sites) {
-            List<Planning> plannings = planningRepository.findBySiteAndStatut(site, null);
-            for (Planning p : plannings) {
-                if (p.getNumVisite() != null && p.getNumVisite() > maxNumVisite) {
-                    maxNumVisite = p.getNumVisite();
-                }
+        for (Planning planning : plannings) {
+            Site site = planning.getSite();
+            if (site.getLatitude() != null && site.getLongitude() != null) {
+                totalDistance += geocodingService.calculateDistance(temara, site);
+                count++;
             }
         }
 
-        return maxNumVisite + 1;
+        return count > 0 ? totalDistance / count : 999.0;
     }
 
-    private boolean visiteExiste(Integer clientId, int numVisite) {
-        List<Site> sites = siteRepository.findByClientIdAndActifTrue(clientId);
-        for (Site site : sites) {
-            List<Planning> plannings = planningRepository.findBySiteAndStatut(site, null);
-            for (Planning p : plannings) {
-                if (p.getNumVisite() != null && p.getNumVisite() == numVisite) {
-                    return true;
+    // service/impl/PlanningServiceImpl.java - AJOUTER cette méthode
+
+    // service/impl/PlanningServiceImpl.java - AJOUTER cette méthode
+
+    /**
+     * ✅ Regrouper les visites par zone géographique (Nord, Centre, Sud)
+     */
+    private Map<String, List<Planning>> regrouperParZoneGeographique(List<Planning> plannings) {
+        Map<String, List<Planning>> zones = new LinkedHashMap<>();
+
+        // ✅ Définition des zones
+        List<String> zoneNord = Arrays.asList(
+                "tanger", "tetouan", "chefchaouen", "larache", "asilah",
+                "fnideq", "martil", "m'diq", "al hoceima", "nador",
+                "oujda", "berkane", "taourirt", "jerada", "saidia", "driouch"
+        );
+
+        List<String> zoneCentre = Arrays.asList(
+                "casablanca", "rabat", "salé", "temara", "kenitra", "mohammedia",
+                "benslimane", "bouznika", "berrechid", "settat", "el jadida",
+                "azemmour", "khouribga", "oued zem", "sidi slimane", "sidi kacem",
+                "meknes", "fes", "khemisset", "sefrou", "moulay yaacoub"
+        );
+
+        List<String> zoneSud = Arrays.asList(
+                "agadir", "marrakech", "essaouira", "safi", "chichaoua",
+                "el kelaa des sraghna", "youssoufia", "rehamna", "taroudannt",
+                "tiznit", "ochtane", "biougra", "taliouine", "ouarzazate",
+                "tinghir", "zagora", "rissani", "erfoud", "midelt",
+                "guelmim", "tan-tan", "taghjijt", "bouizakarne", "sidi ifni",
+                "laayoune", "boujdour", "tarfaya", "es-semara", "dakhla"
+        );
+
+        for (Planning p : plannings) {
+            String ville = extractVille(p.getSite().getAdresse()).toLowerCase().trim();
+            String zone = "Autre";
+
+            if (zoneNord.contains(ville)) {
+                zone = "Nord";
+            } else if (zoneCentre.contains(ville)) {
+                zone = "Centre";
+            } else if (zoneSud.contains(ville)) {
+                zone = "Sud";
+            }
+
+            zones.computeIfAbsent(zone, k -> new ArrayList<>()).add(p);
+            log.debug("   📍 {} → Zone {}", ville, zone);
+        }
+
+        // ✅ Afficher le résumé des zones
+        for (Map.Entry<String, List<Planning>> entry : zones.entrySet()) {
+            log.info("📍 Zone {}: {} visite(s)", entry.getKey(), entry.getValue().size());
+        }
+
+        return zones;
+    }
+
+
+    /**
+     * ✅ Trouver une date UNIQUE pour un site (vérifie en base directement)
+     */
+    private LocalDate trouverDateUnique(Site site, int numVisite, int annee,
+                                        HolidayService.Period period, Set<LocalDate> datesUtilisees) {
+
+        log.info("🔍 Recherche date UNIQUE pour V{} - {}", numVisite, site.getNom());
+
+        // ✅ Récupérer les dates déjà utilisées par CE site (en base)
+        Set<LocalDate> datesSite = new HashSet<>();
+        List<Planning> planningsSite = planningRepository.findBySite(site);
+        for (Planning p : planningsSite) {
+            if (p.getDateProposee() != null && p.getStatut() != StatutVisite.ANNULE) {
+                datesSite.add(p.getDateProposee());
+            }
+        }
+
+        log.info("   📌 Dates du site {}: {}", site.getNom(), datesSite);
+        log.info("   📌 Dates globales: {}", datesUtilisees);
+
+        // ✅ Commencer au début de la période
+        LocalDate dateCourante = LocalDate.of(annee, period.moisDebut, 1);
+        int maxAttempts = 90;
+
+        for (int i = 0; i < maxAttempts; i++) {
+            LocalDate candidate = dateCourante.plusDays(i);
+
+            // ✅ Vérifier l'année
+            if (candidate.getYear() != annee) {
+                break;
+            }
+
+            int mois = candidate.getMonthValue();
+
+            // ✅ Vérifier que le mois est dans la période
+            if (mois < period.moisDebut || mois > period.moisFin) {
+                continue;
+            }
+
+            // ✅ Vérifier que la date est valide
+            if (!holidayService.isValidDateForVisit(candidate)) {
+                continue;
+            }
+
+            // ✅ Vérifier que la date n'est pas déjà utilisée (GLOBAL)
+            if (datesUtilisees.contains(candidate)) {
+                log.debug("      📌 {}: déjà utilisée globalement", candidate);
+                continue;
+            }
+
+            // ✅ Vérifier que CE site n'a pas déjà une visite à cette date
+            if (datesSite.contains(candidate)) {
+                log.debug("      📌 {}: déjà utilisée par ce site", candidate);
+                continue;
+            }
+
+            log.info("   ✅ Date trouvée pour {}: {}", site.getNom(), candidate);
+            return candidate;
+        }
+
+        log.warn("   ⚠️ Aucune date trouvée dans la période pour {}", site.getNom());
+        return null;
+    }
+
+    /**
+     * ✅ Trouver une date dans la période avec décalage
+     */
+    private LocalDate trouverDateDansPeriode(Site site, int numVisite, int annee,
+                                             HolidayService.Period period, Set<LocalDate> datesUtilisees, int offset) {
+
+        log.info("🔍 Recherche V{} - {} (offset: {})", numVisite, site.getNom(), offset);
+
+        // ✅ Date de départ = début de la période + offset
+        LocalDate dateDepart = LocalDate.of(annee, period.moisDebut, 1).plusDays(offset);
+        log.info("   📌 Date de départ: {}", dateDepart);
+
+        // ✅ Récupérer les dates déjà utilisées par CE site
+        Set<LocalDate> datesSite = new HashSet<>();
+        List<Planning> planningsSite = planningRepository.findBySite(site);
+        for (Planning p : planningsSite) {
+            if (p.getDateProposee() != null && p.getStatut() != StatutVisite.ANNULE) {
+                datesSite.add(p.getDateProposee());
+            }
+        }
+
+        // ✅ Rechercher une date valide (max 90 jours pour rester dans la période)
+        for (int i = 0; i < 90; i++) {
+            LocalDate candidate = dateDepart.plusDays(i);
+
+            // ✅ Vérifier que l'année est correcte
+            if (candidate.getYear() != annee) {
+                log.warn("   📌 Année changée: {} -> {}, arrêt recherche", annee, candidate.getYear());
+                return null;
+            }
+
+            int mois = candidate.getMonthValue();
+
+            // ✅ Vérifier que le mois est dans la période
+            if (mois < period.moisDebut || mois > period.moisFin) {
+                continue;
+            }
+
+            // ✅ Vérifier que la date est valide (pas week-end, pas férié, pas août)
+            if (!holidayService.isValidDateForVisit(candidate)) {
+                continue;
+            }
+
+            // ✅ Vérifier que la date n'est pas déjà utilisée
+            if (datesUtilisees.contains(candidate)) {
+                continue;
+            }
+            if (datesSite.contains(candidate)) {
+                continue;
+            }
+
+            log.info("   ✅ Date trouvée: {}", candidate);
+            return candidate;
+        }
+
+        log.warn("   ⚠️ Aucune date trouvée dans la période");
+        return null;
+    }
+
+    /**
+     * ✅ Trouver une date avec DECALAGE FORCE (ne dépasse pas l'année)
+     */
+    private LocalDate trouverDateAvecDecalageForce(Site site, int numVisite, int annee,
+                                                   Set<LocalDate> datesUtilisees, int offset) {
+        log.info("🔍 Recherche V{} - {} (offset: {}, année forcée: {})",
+                numVisite, site.getNom(), offset, annee);
+
+        try {
+            Client client = site.getClient();
+            int nbVisitesAn = client.getNbVisitesAn() != null ? client.getNbVisitesAn() : 4;
+
+            HolidayService.Period period = holidayService.getPeriodForVisite(numVisite, nbVisitesAn);
+            log.info("   📌 Période V{}: {}-{}", numVisite, period.moisDebut, period.moisFin);
+
+            // ✅ Date de base = début de la période + offset
+            LocalDate dateBase = LocalDate.of(annee, period.moisDebut, 1).plusDays(offset);
+            log.info("   📌 Date de base: {}", dateBase);
+
+            // ✅ Récupérer les dates du site
+            Set<LocalDate> datesSite = new HashSet<>();
+            List<Planning> planningsSite = planningRepository.findBySite(site);
+            for (Planning p : planningsSite) {
+                if (p.getDateProposee() != null && p.getStatut() != StatutVisite.ANNULE) {
+                    datesSite.add(p.getDateProposee());
                 }
+            }
+
+            // ✅ Recherche dans la période (max 90 jours pour rester dans la période)
+            int maxAttempts = 90;
+            for (int i = 0; i < maxAttempts; i++) {
+                LocalDate candidate = dateBase.plusDays(i);
+                int mois = candidate.getMonthValue();
+                int anneeCandidate = candidate.getYear();
+
+                // ✅ FORCER l'année
+                if (anneeCandidate != annee) {
+                    continue;
+                }
+
+                // ✅ Vérifier le mois
+                if (mois < period.moisDebut || mois > period.moisFin) {
+                    continue;
+                }
+
+                // ✅ Vérifier validité
+                if (!holidayService.isValidDateForVisit(candidate)) {
+                    continue;
+                }
+
+                // ✅ Vérifier doublons
+                if (datesUtilisees.contains(candidate)) {
+                    continue;
+                }
+                if (datesSite.contains(candidate)) {
+                    continue;
+                }
+
+                log.info("   ✅ Date trouvée: {}", candidate);
+                return candidate;
+            }
+
+            // ✅ Fallback : jour suivant dans la même année
+            log.warn("   ⚠️ Aucune date trouvée, recherche jour par jour dans {}", annee);
+            LocalDate fallback = LocalDate.of(annee, period.moisDebut, 1);
+            for (int i = 0; i < 365; i++) {
+                LocalDate candidate = fallback.plusDays(i);
+                if (candidate.getYear() != annee) break;
+
+                if (candidate.getMonthValue() < period.moisDebut || candidate.getMonthValue() > period.moisFin) {
+                    continue;
+                }
+                if (!holidayService.isValidDateForVisit(candidate)) continue;
+                if (datesUtilisees.contains(candidate)) continue;
+                if (datesSite.contains(candidate)) continue;
+
+                return candidate;
+            }
+
+            return null;
+
+        } catch (Exception e) {
+            log.error("❌ Erreur: {}", e.getMessage(), e);
+            return null;
+        }
+    }
+
+
+    private LocalDate trouverDateAvecDecalage(Site site, int numVisite, int annee,
+                                              Set<LocalDate> datesUtilisees, int offset) {
+        log.info("🔍 Recherche de date pour V{} - {} (offset: {}, année: {})",
+                numVisite, site.getNom(), offset, annee);
+
+        try {
+            Client client = site.getClient();
+            int nbVisitesAn = client.getNbVisitesAn() != null ? client.getNbVisitesAn() : 4;
+
+            HolidayService.Period period = holidayService.getPeriodForVisite(numVisite, nbVisitesAn);
+            log.info("   📌 Période V{}: {}-{}", numVisite, period.moisDebut, period.moisFin);
+
+            // ✅ Date de base = début de la période + DECALAGE
+            LocalDate dateBase = LocalDate.of(annee, period.moisDebut, 1).plusDays(offset);
+            log.info("   📌 Date de base (offset {}): {}", offset, dateBase);
+
+            // ✅ Si la date est dans le passé, avancer
+            LocalDate now = LocalDate.now();
+            if (dateBase.isBefore(now) || dateBase.isEqual(now)) {
+                dateBase = now.plusDays(1);
+                log.info("   📌 Date ajustée (passée): {}", dateBase);
+            }
+
+            // ✅ Récupérer les dates déjà utilisées par CE site
+            Set<LocalDate> datesSite = new HashSet<>();
+            List<Planning> planningsSite = planningRepository.findBySite(site);
+            for (Planning p : planningsSite) {
+                if (p.getDateProposee() != null && p.getStatut() != StatutVisite.ANNULE) {
+                    datesSite.add(p.getDateProposee());
+                }
+            }
+
+            log.info("   📌 Dates déjà utilisées par {}: {}", site.getNom(), datesSite);
+            log.info("   📌 Dates globales: {}", datesUtilisees);
+
+            // ✅ Recherche d'une date valide
+            int maxAttempts = 365;
+            for (int i = 0; i < maxAttempts; i++) {
+                LocalDate candidate = dateBase.plusDays(i);
+                int mois = candidate.getMonthValue();
+                int anneeCandidate = candidate.getYear();
+
+                // ✅ Vérifier que l'année est correcte (2026, pas 2027)
+                if (anneeCandidate != annee) {
+                    log.debug("      📌 {}: année différente ({} != {})", candidate, anneeCandidate, annee);
+                    continue;
+                }
+
+                // ✅ Vérifier que le mois est dans la période
+                if (mois < period.moisDebut || mois > period.moisFin) {
+                    log.debug("      📌 {}: hors période ({}-{})", candidate, period.moisDebut, period.moisFin);
+                    continue;
+                }
+
+                // ✅ Vérifier que la date est valide
+                if (!holidayService.isValidDateForVisit(candidate)) {
+                    log.debug("      📌 {}: date invalide", candidate);
+                    continue;
+                }
+
+                // ✅ Vérifier que la date n'est pas déjà utilisée (GLOBAL)
+                if (datesUtilisees.contains(candidate)) {
+                    log.debug("      📌 {}: déjà utilisée globalement", candidate);
+                    continue;
+                }
+
+                // ✅ Vérifier que ce site n'a pas déjà une visite à cette date
+                if (datesSite.contains(candidate)) {
+                    log.debug("      📌 {}: site déjà occupé", candidate);
+                    continue;
+                }
+
+                log.info("   ✅ Date trouvée pour {}: {}", site.getNom(), candidate);
+                return candidate;
+            }
+
+            // ✅ Fallback : chercher dans la même année avec un décalage plus grand
+            log.warn("   ⚠️ Aucune date trouvée en {}, recherche avec décalage +5", annee);
+            return trouverDateAvecDecalage(site, numVisite, annee, datesUtilisees, offset + 5);
+
+        } catch (Exception e) {
+            log.error("❌ Erreur lors de la recherche: {}", e.getMessage(), e);
+            return null;
+        }
+    }
+
+
+    /**
+     * ✅ Vérifier si une visite existe déjà pour un site spécifique
+     */
+    private boolean visiteExistePourSite(Site site, int numVisite) {
+        List<Planning> plannings = planningRepository.findBySite(site);
+        for (Planning p : plannings) {
+            if (p.getNumVisite() != null && p.getNumVisite() == numVisite && p.getStatut() != StatutVisite.ANNULE) {
+                return true;
             }
         }
         return false;
     }
 
-    private LocalDate calculerDateProchaineVisite(Client client, int numVisite) {
-        int nbVisitesAn = client.getNbVisitesAn() != null ? client.getNbVisitesAn() : 4;
-        int moisInterval = nbVisitesAn == 4 ? 3 : 6;
+    @Override
+    @Transactional
+    public void planifierPlageVisites(Integer clientId, Integer numVisiteDebut, Integer numVisiteFin) {
+        log.info("📅 Planification des visites V{} à V{} pour le client ID: {}",
+                numVisiteDebut, numVisiteFin, clientId);
 
-        LocalDate dateBase = LocalDate.now().plusMonths(1);
-        int decalageMois = (numVisite - 1) * moisInterval;
-        LocalDate dateProposee = dateBase.plusMonths(decalageMois);
+        try {
+            Client client = clientRepository.findById(clientId)
+                    .orElseThrow(() -> new RuntimeException("Client non trouvé"));
 
-        dateProposee = holidayService.findNextValidDate(dateProposee);
+            int nbVisitesAn = client.getNbVisitesAn() != null ? client.getNbVisitesAn() : 4;
 
-        log.info("📅 Calcul de la date pour V{}: {} (décalage de {} mois)",
-                numVisite, dateProposee, decalageMois);
+            if (numVisiteDebut < 1) numVisiteDebut = 1;
+            if (numVisiteFin > nbVisitesAn) numVisiteFin = nbVisitesAn;
 
-        return dateProposee;
+            for (int i = numVisiteDebut; i <= numVisiteFin; i++) {
+                try {
+                    if (!visiteExiste(clientId, i) && !visiteEstAccepteeOuConfirmee(clientId, i)) {
+                        planifierVisiteSpecifique(clientId, i);
+                        log.info("✅ Visite V{} planifiée", i);
+                    } else {
+                        log.info("ℹ️ Visite V{} déjà planifiée ou acceptée", i);
+                    }
+                } catch (Exception e) {
+                    log.error("❌ Erreur lors de la planification de V{}: {}", i, e.getMessage());
+                }
+            }
+
+        } catch (Exception e) {
+            log.error("❌ Erreur: {}", e.getMessage(), e);
+            throw new RuntimeException("Erreur: " + e.getMessage());
+        }
     }
 
-    private String extractVille(String adresse) {
-        if (adresse == null || adresse.isEmpty()) {
-            return "Inconnu";
+    // ============================================================
+    // ✅ ACTIONS SUR LES VISITES
+    // ============================================================
+
+    @Override
+    @Transactional
+    public void relancerVisite(Integer planningId) {
+        try {
+            Planning planning = getPlanningById(planningId);
+
+            if (planning.getStatut() != StatutVisite.REFUSE) {
+                throw new RuntimeException("Seules les visites refusées peuvent être relancées");
+            }
+
+            Client client = planning.getSite().getClient();
+            int numVisite = planning.getNumVisite();
+            int anneeActuelle = LocalDate.now().getYear();
+
+            Set<LocalDate> datesUtilisees = new HashSet<>();
+            LocalDate nouvelleDate = planifierVisiteAvecPeriode(planning.getSite(), numVisite, anneeActuelle, datesUtilisees);
+
+            if (nouvelleDate == null) {
+                nouvelleDate = calculerDateParPeriodeEtAnnee(client, numVisite, anneeActuelle + 1);
+            }
+
+            planning.setDateProposee(nouvelleDate);
+            planning.setDateVisite(nouvelleDate);
+            planning.setStatut(StatutVisite.EN_ATTENTE);
+            planning.setNbRelances(0);
+            planning.setDateEnvoi(LocalDateTime.now());
+            planning.setDateReponse(null);
+            planningRepository.save(planning);
+
+            envoyerProposition(planningId);
+
+            log.info("🔄 Visite V{} relancée avec nouvelle date: {}", planning.getNumVisite(), nouvelleDate);
+
+        } catch (Exception e) {
+            log.error("❌ Erreur lors de la relance: {}", e.getMessage(), e);
+            throw new RuntimeException("Erreur lors de la relance", e);
         }
-        String[] parts = adresse.split(",");
-        return parts.length >= 2 ? parts[parts.length - 1].trim() : adresse;
+    }
+
+    @Override
+    @Transactional
+    public void annulerVisite(Integer planningId) {
+        try {
+            Planning planning = getPlanningById(planningId);
+            planning.setStatut(StatutVisite.ANNULE);
+            planningRepository.save(planning);
+            log.info("🗑️ Visite V{} annulée par l'administrateur", planning.getNumVisite());
+
+            notificationService.notifierChangementStatut(planningId, planning.getStatut().name(), "ANNULE");
+
+        } catch (Exception e) {
+            log.error("❌ Erreur lors de l'annulation: {}", e.getMessage(), e);
+            throw new RuntimeException("Erreur lors de l'annulation", e);
+        }
     }
 
     // ============================================================
@@ -469,6 +1330,13 @@ public class PlanningServiceImpl implements PlanningService {
         try {
             Planning planning = getPlanningById(planningId);
 
+            if (planning.getStatut() == StatutVisite.ACCEPTE ||
+                    planning.getStatut() == StatutVisite.CONFIRME ||
+                    planning.getStatut() == StatutVisite.REALISE) {
+                log.warn("⚠️ La visite V{} est déjà acceptée/confirmée, pas d'envoi d'email", planning.getNumVisite());
+                return;
+            }
+
             String email = planning.getSite().getEmailContact();
             String clientEmail = planning.getSite().getClient().getEmailContact();
 
@@ -494,48 +1362,36 @@ public class PlanningServiceImpl implements PlanningService {
         }
     }
 
-    // service/impl/PlanningServiceImpl.java - Modifier cette méthode
-
     @Override
     @Transactional
     public void traiterReponseClient(Integer planningId, boolean accepte) {
         try {
             Planning planning = getPlanningById(planningId);
+
+            if (planning.getStatut() == StatutVisite.ACCEPTE ||
+                    planning.getStatut() == StatutVisite.CONFIRME ||
+                    planning.getStatut() == StatutVisite.REALISE) {
+                log.warn("⚠️ La visite V{} a déjà été traitée (statut: {})",
+                        planning.getNumVisite(), planning.getStatut());
+                throw new RuntimeException("Cette visite a déjà été traitée et ne peut plus être modifiée.");
+            }
+
             String ancienStatut = planning.getStatut() != null ? planning.getStatut().name() : "NON_DEFINI";
             planning.setDateReponse(LocalDateTime.now());
 
             if (accepte) {
-                // ✅ ACCEPTÉ - Confirmer la visite
                 planning.setStatut(StatutVisite.ACCEPTE);
                 planning.setDateConfirmee(planning.getDateProposee());
                 planning.setDateVisite(planning.getDateProposee());
+
                 emailService.sendConfirmationEmail(planning);
                 notificationService.notifierChangementStatut(planningId, ancienStatut, "ACCEPTE");
-
-                log.info("✅ Visite V{} acceptée par le client", planning.getNumVisite());
+                log.info("✅ Visite V{} acceptée par le client - Email de confirmation envoyé", planning.getNumVisite());
 
             } else {
-                // ❌ REFUSÉ PAR LE CLIENT - Reprogrammer automatiquement
-                // NE PAS ANNULER ! Proposer une nouvelle date
                 planning.setStatut(StatutVisite.REFUSE);
                 notificationService.notifierChangementStatut(planningId, ancienStatut, "REFUSE");
-
-                // Proposer une nouvelle date (7 jours plus tard)
-                LocalDate nouvelleDate = planning.getDateProposee().plusDays(7);
-
-                // Vérifier que la nouvelle date est valide (week-end, jours fériés, août)
-                nouvelleDate = holidayService.findNextValidDate(nouvelleDate);
-
-                planning.setDateProposee(nouvelleDate);
-                planning.setStatut(StatutVisite.EN_ATTENTE);
-                planning.setNbRelances(0);
-                planning.setDateEnvoi(LocalDateTime.now());
-                planningRepository.save(planning);
-
-                // Envoyer une nouvelle proposition
-                envoyerProposition(planningId);
-
-                log.info("🔄 Nouvelle date proposée pour la visite V{}: {}", planning.getNumVisite(), nouvelleDate);
+                log.info("❌ Visite V{} refusée par le client - En attente de décision admin", planning.getNumVisite());
             }
             planningRepository.save(planning);
 
@@ -665,6 +1521,63 @@ public class PlanningServiceImpl implements PlanningService {
     }
 
     // ============================================================
+    // ✅ MÉTHODES DE VÉRIFICATION
+    // ============================================================
+
+    private boolean visiteExiste(Integer clientId, int numVisite) {
+        List<Site> sites = siteRepository.findByClientIdAndActifTrue(clientId);
+        for (Site site : sites) {
+            List<Planning> plannings = planningRepository.findBySite(site);
+            for (Planning p : plannings) {
+                if (p.getNumVisite() != null &&
+                        p.getNumVisite() == numVisite &&
+                        p.getStatut() != StatutVisite.ANNULE) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private boolean visiteEstAccepteeOuConfirmee(Integer clientId, int numVisite) {
+        List<Site> sites = siteRepository.findByClientIdAndActifTrue(clientId);
+        for (Site site : sites) {
+            List<Planning> plannings = planningRepository.findBySite(site);
+            for (Planning p : plannings) {
+                if (p.getNumVisite() != null && p.getNumVisite() == numVisite) {
+                    if (p.getStatut() == StatutVisite.ACCEPTE || p.getStatut() == StatutVisite.CONFIRME) {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
+    private LocalDate calculerDateParPeriodeEtAnnee(Client client, int numVisite, int annee) {
+        int nbVisitesAn = client.getNbVisitesAn() != null ? client.getNbVisitesAn() : 4;
+        HolidayService.Period period = holidayService.getPeriodForVisite(numVisite, nbVisitesAn);
+
+        LocalDate now = LocalDate.now();
+        int currentYear = now.getYear();
+        int currentMonth = now.getMonthValue();
+
+        if (annee == currentYear && currentMonth > period.moisFin) {
+            annee = currentYear + 1;
+        }
+
+        LocalDate dateBase = LocalDate.of(annee, period.moisDebut, 1);
+
+        if (dateBase.isBefore(now) || dateBase.isEqual(now)) {
+            dateBase = dateBase.plusDays(1);
+        }
+
+        LocalDate dateValide = holidayService.findNextValidDateInPeriod(dateBase, period.moisDebut, period.moisFin);
+
+        return dateValide;
+    }
+
+    // ============================================================
     // ✅ NOTIFICATIONS
     // ============================================================
 
@@ -768,62 +1681,6 @@ public class PlanningServiceImpl implements PlanningService {
         }
 
         return dto;
-    }
-
-    // service/impl/PlanningServiceImpl.java - Ajouter cette méthode
-
-    @Override
-    @Transactional
-    public void annulerVisite(Integer planningId) {
-        try {
-            Planning planning = getPlanningById(planningId);
-            planning.setStatut(StatutVisite.ANNULE);
-            planningRepository.save(planning);
-            log.info("🗑️ Visite V{} annulée par l'administrateur", planning.getNumVisite());
-
-            // Notification
-            notificationService.notifierChangementStatut(planningId, planning.getStatut().name(), "ANNULE");
-
-        } catch (Exception e) {
-            log.error("❌ Erreur lors de l'annulation: {}", e.getMessage(), e);
-            throw new RuntimeException("Erreur lors de l'annulation", e);
-        }
-    }
-
-    @Override
-    @Transactional
-    public int planifierProchaineVisitePourTousLesClients() {
-        log.info("📅 Planification de la prochaine visite pour tous les clients");
-
-        List<Client> clients = clientRepository.findByActifTrue();
-        int totalCrees = 0;
-
-        for (Client client : clients) {
-            try {
-                // Vérifier que le client a un nbVisitesAn
-                if (client.getNbVisitesAn() == null || client.getNbVisitesAn() <= 0) {
-                    log.warn("⚠️ Client {} sans nbVisitesAn, ignoré", client.getNom());
-                    continue;
-                }
-
-                // Vérifier si le client a encore des visites à planifier
-                List<Site> sites = siteRepository.findByClientIdAndActifTrue(client.getId());
-                if (!sites.isEmpty()) {
-                    int prochainNum = getProchainNumVisite(client.getId(), sites);
-                    if (prochainNum <= client.getNbVisitesAn()) {
-                        planifierProchaineVisite(client.getId());
-                        totalCrees++;
-                    } else {
-                        log.info("ℹ️ Client {} a déjà toutes ses visites planifiées", client.getNom());
-                    }
-                }
-            } catch (Exception e) {
-                log.error("❌ Erreur pour le client {}: {}", client.getNom(), e.getMessage());
-            }
-        }
-
-        log.info("✅ Planification de la prochaine visite terminée pour {} clients", totalCrees);
-        return totalCrees;
     }
 
     @Override

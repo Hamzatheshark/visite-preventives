@@ -25,6 +25,7 @@ public interface PlanningRepository extends JpaRepository<Planning, Integer> {
 
     Optional<Planning> findByNumVisite(Integer numVisite);
 
+
     boolean existsBySiteAndDateVisite(Site site, LocalDate date);
 
     // ====== RECHERCHES PAR EMAIL ======
@@ -43,6 +44,10 @@ public interface PlanningRepository extends JpaRepository<Planning, Integer> {
     @Query("SELECT p FROM Planning p WHERE p.statut = 'REALISE' AND p.pieceIntervention IS NULL")
     List<Planning> findVisitesWithoutPI();
 
+    @Query("SELECT p FROM Planning p WHERE p.technicien.id = :technicienId")
+    List<Planning> findByTechnicienId(@Param("technicienId") Integer technicienId);
+
+    List<Planning> findBySite(Site site);
     // ====== RECHERCHES PAR DATE ======
 
     List<Planning> findByDateVisite(LocalDate date);

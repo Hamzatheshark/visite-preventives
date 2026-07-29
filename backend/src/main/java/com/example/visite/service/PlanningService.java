@@ -1,4 +1,4 @@
-// service/PlanningService.java - Version finale COMPLETE
+// service/PlanningService.java - COMPLET
 package com.example.visite.service;
 
 import com.example.visite.model.Planning;
@@ -27,10 +27,11 @@ public interface PlanningService {
     // PLANIFICATION
     void planifierVisitesPourClient(Integer clientId);
     int planifierVisitesPourTousLesClients();
-
-    // ✅ NOUVELLES MÉTHODES POUR LA PLANIFICATION PROGRESSIVE
     void planifierProchaineVisite(Integer clientId);
     void planifierToutesVisitesManquantes(Integer clientId);
+    int planifierProchaineVisitePourTousLesClients();
+    void planifierVisiteSpecifique(Integer clientId, Integer numVisite);
+    void planifierPlageVisites(Integer clientId, Integer numVisiteDebut, Integer numVisiteFin);
 
     // Actions
     void envoyerProposition(Integer planningId);
@@ -42,11 +43,11 @@ public interface PlanningService {
     void marquerTerminee(Integer planningId);
     void annulerAssignmentResponsable(Integer planningId);
     void annulerAssignmentTechnicien(Integer planningId);
-    int planifierProchaineVisitePourTousLesClients();
+    void annulerVisite(Integer planningId);
+    void relancerVisite(Integer planningId);
     // Notifications
     void notifierChangementStatut(Integer planningId, String ancienStatut, String nouveauStatut);
-    // service/PlanningService.java - Ajouter cette méthode
-    void annulerVisite(Integer planningId);
+    void planifierVisitesParZone();
     // Conversion DTO
     PlanningDTO convertToDTO(Planning planning);
     List<PlanningDTO> convertToDTOList(List<Planning> plannings);
