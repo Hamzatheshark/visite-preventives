@@ -119,6 +119,7 @@ public class PlanningServiceImpl implements PlanningService {
 
         List<Client> clients = clientRepository.findByActifTrue();
         int totalCrees = 0;
+        int totalEmailsEnvoyes = 0; // ✅ Nouveau compteur
 
         // ✅ Définir l'ordre des zones
         List<String> ordreZones = Arrays.asList("Centre", "Nord", "Sud", "Autre");
@@ -229,7 +230,6 @@ public class PlanningServiceImpl implements PlanningService {
             // ✅ Déterminer le numéro de visite à planifier
             int numVisiteAPlanifier = getNumeroVisitePourPeriode(prochainePeriodeGlobale, nbVisitesAn);
             if (numVisiteAPlanifier == -1) {
-                // Ce site n'a pas de visite pour cette période (ex: 2 visites/an pour période 2 ou 4)
                 log.debug("   ⏭️ Site: {} - Période {} non applicable ({} visites/an)",
                         site.getNom(), prochainePeriodeGlobale, nbVisitesAn);
                 continue;
@@ -265,7 +265,6 @@ public class PlanningServiceImpl implements PlanningService {
                     .with(java.time.temporal.TemporalAdjusters.lastDayOfMonth());
 
             // ✅ Chercher la première date disponible dans la période
-            // On commence par la date idéale (début de période) mais on doit être >= currentDate
             LocalDate startSearch = dateDebutPeriode.isAfter(currentDate) ? dateDebutPeriode : currentDate;
 
             LocalDate dateFinale = null;
@@ -309,9 +308,20 @@ public class PlanningServiceImpl implements PlanningService {
 
             log.info("   ✅ {} - {} ({}) - Zone: {} - Distance: {:.1f} km - Date: {}",
                     numAffiche, site.getNom(), ville, zone, distance, dateFinale);
+
+            // ✅ ENVOYER L'EMAIL APRÈS LA CRÉATION DE LA VISITE
+            log.info("   📧 Envoi de l'email pour V{} - {}", numVisiteAPlanifier, site.getNom());
+            try {
+                envoyerProposition(saved.getId());
+                totalEmailsEnvoyes++;
+                log.info("   ✅ Email envoyé pour V{} - {}", numVisiteAPlanifier, site.getNom());
+            } catch (Exception e) {
+                log.error("   ❌ Erreur envoi email pour V{} - {}: {}",
+                        numVisiteAPlanifier, site.getNom(), e.getMessage());
+            }
         }
 
-        log.info("✅ Planification terminée: {} visites créées", totalCrees);
+        log.info("✅ Planification terminée: {} visites créées, {} emails envoyés", totalCrees, totalEmailsEnvoyes);
         return totalCrees;
     }
 

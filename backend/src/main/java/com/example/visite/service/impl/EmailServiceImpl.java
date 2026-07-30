@@ -1,4 +1,3 @@
-// service/impl/EmailServiceImpl.java
 package com.example.visite.service.impl;
 
 import com.example.visite.model.Planning;
@@ -31,29 +30,57 @@ public class EmailServiceImpl implements EmailService {
 
     @Override
     public void sendPropositionEmail(Planning planning) {
+        log.info("========================================");
+        log.info("📧 ENVOI D'EMAIL DE PROPOSITION");
+        log.info("========================================");
+
         try {
             Client client = planning.getSite().getClient();
             Site site = planning.getSite();
-            String to = site.getEmailContact() != null ? site.getEmailContact() : client.getEmailContact();
 
+            // ✅ Récupérer TOUS les emails disponibles
+            String emailSite = site.getEmailContact();
+            String emailClient = client.getEmailContact();
+
+            log.info("📧 Email du site: '{}'", emailSite);
+            log.info("📧 Email du client: '{}'", emailClient);
+            log.info("📧 From (configuré): '{}'", fromEmail);
+            log.info("📧 Email enabled: {}", emailEnabled);
+
+            // ✅ Déterminer le destinataire avec priorité
+            String to = null;
+            if (emailSite != null && !emailSite.trim().isEmpty()) {
+                to = emailSite.trim();
+                log.info("✅ Destinataire choisi: Email du site");
+            } else if (emailClient != null && !emailClient.trim().isEmpty()) {
+                to = emailClient.trim();
+                log.info("✅ Destinataire choisi: Email du client");
+            }
+
+            // ✅ SI AUCUN EMAIL, LOGUER CLAIREMENT ET CONTINUER
             if (to == null || to.isEmpty()) {
-                log.warn("⚠️ Aucun email pour le client {}, email non envoyé", client.getNom());
-                return;
+                String errorMsg = String.format(
+                        "❌ AUCUN EMAIL trouvé pour la visite V%d - Client: %s, Site: %s",
+                        planning.getNumVisite(),
+                        client.getNom(),
+                        site.getNom()
+                );
+                log.error(errorMsg);
+                log.warn("⚠️ Veuillez mettre à jour les coordonnées du client ou du site");
+                log.info("========================================");
+                return; // On sort sans envoyer d'email
             }
 
-            log.info("========================================");
-            log.info("📧 ENVOI D'EMAIL");
-            log.info("📧 De: {}", fromEmail);
-            log.info("📧 À: {}", to);
-            log.info("📧 Client: {}", client.getNom());
-            log.info("📧 Site: {}", site.getNom());
-            log.info("📧 Date: {}", planning.getDateProposee());
-            log.info("========================================");
-
+            // ✅ Vérifier que les emails sont activés
             if (!emailEnabled) {
-                log.info("📧 EMAIL DESACTIVE - Email non envoyé");
+                log.warn("⚠️ EMAIL DESACTIVE - L'email n'a pas été envoyé");
+                log.info("📧 Pour activer les emails, mettez spring.mail.enabled=true");
+                log.info("========================================");
                 return;
             }
+
+            // ✅ Construire l'email
+            log.info("📧 Construction de l'email pour: {}", to);
 
             MimeMessage message = mailSender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
@@ -66,11 +93,23 @@ public class EmailServiceImpl implements EmailService {
             String htmlContent = buildPropositionEmail(planning);
             helper.setText(htmlContent, true);
 
+            // ✅ Envoyer l'email
+            log.info("📧 Envoi de l'email à {}...", to);
             mailSender.send(message);
-            log.info("✅ Email envoyé avec succès à {}", to);
 
+            log.info("✅ EMAIL ENVOYÉ AVEC SUCCÈS à {}", to);
+            log.info("========================================");
+
+        } catch (jakarta.mail.AuthenticationFailedException e) {
+            log.error("❌ ERREUR D'AUTHENTIFICATION SMTP");
+            log.error("   - Email: {}", fromEmail);
+            log.error("   - Vérifiez le mot de passe d'application Gmail");
+            log.error("   - Générez-en un nouveau sur: https://myaccount.google.com/apppasswords");
+            log.error("   - Message: {}", e.getMessage(), e);
+            log.info("========================================");
         } catch (Exception e) {
             log.error("❌ Erreur lors de l'envoi de l'email: {}", e.getMessage(), e);
+            log.info("========================================");
         }
     }
 
@@ -82,7 +121,7 @@ public class EmailServiceImpl implements EmailService {
             String to = site.getEmailContact() != null ? site.getEmailContact() : client.getEmailContact();
 
             if (to == null || to.isEmpty()) {
-                log.warn("⚠️ Aucun email pour le client {}", client.getNom());
+                log.warn("⚠️ Aucun email pour le client {}, email non envoyé", client.getNom());
                 return;
             }
 
@@ -183,11 +222,10 @@ public class EmailServiceImpl implements EmailService {
         log.info("📧 Envoi PDF planning visite {}", planning.getId());
     }
 
-    // ===== BUILDERS D'EMAILS =====
+    // ===== BUILDERS D'EMAILS (inchangés) =====
     private String buildPropositionEmail(Planning planning) {
         DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy");
 
-        // Créer le token pour l'acceptation et le refus
         String acceptToken = Base64.getEncoder().encodeToString(
                 (planning.getId() + ":true").getBytes()
         );
