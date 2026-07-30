@@ -110,24 +110,439 @@ public class PlanningServiceImpl implements PlanningService {
     // ✅ PLANIFICATION POUR TOUS LES CLIENTS
     // ============================================================
 
-// service/impl/PlanningServiceImpl.java - REMPLACER cette méthode
+    // service/impl/PlanningServiceImpl.java - REMPLACER COMPLÈTEMENT cette méthode
 
     @Override
     @Transactional
     public int planifierProchaineVisitePourTousLesClients() {
-        log.info("📅 Planification de la prochaine visite pour tous les clients (OPTIMISÉE)");
+        log.info("📅 Planification UNIQUEMENT de la prochaine visite manquante (synchronisée)");
 
-        // ✅ Utiliser la planification par zone
-        planifierVisitesParZone();
+        List<Client> clients = clientRepository.findByActifTrue();
+        int totalCrees = 0;
 
-        // Compter le nombre de visites créées
-        List<Planning> allPlannings = planningRepository.findAll();
-        int count = (int) allPlannings.stream()
-                .filter(p -> p.getStatut() == StatutVisite.EN_ATTENTE)
-                .count();
+        // ✅ Définir l'ordre des zones
+        List<String> ordreZones = Arrays.asList("Centre", "Nord", "Sud", "Autre");
 
-        log.info("✅ Planification terminée: {} visites créées", count);
-        return count;
+        // ✅ Définition des villes par zone
+        List<String> zoneNord = Arrays.asList(
+                "tanger", "tetouan", "chefchaouen", "larache", "asilah",
+                "fnideq", "martil", "m'diq", "al hoceima", "nador",
+                "oujda", "berkane", "taourirt", "jerada", "saidia", "driouch",
+                "taza", "taounate", "guercif"
+        );
+
+        List<String> zoneCentre = Arrays.asList(
+                "casablanca", "rabat", "salé", "temara", "kenitra", "mohammedia",
+                "benslimane", "bouznika", "berrechid", "settat", "el jadida",
+                "azemmour", "khouribga", "oued zem", "sidi slimane", "sidi kacem",
+                "meknes", "fes", "khemisset", "sefrou", "moulay yaacoub"
+        );
+
+        List<String> zoneSud = Arrays.asList(
+                "agadir", "marrakech", "essaouira", "safi", "chichaoua",
+                "el kelaa des sraghna", "youssoufia", "rehamna", "taroudannt",
+                "tiznit", "ochtane", "biougra", "taliouine", "ouarzazate",
+                "tinghir", "zagora", "rissani", "erfoud", "midelt",
+                "guelmim", "tan-tan", "taghjijt", "bouizakarne", "sidi ifni",
+                "laayoune", "boujdour", "tarfaya", "es-semara", "dakhla",
+                "azilal", "khenifra", "fquih ben salah", "beni mellal"
+        );
+
+        int anneeActuelle = LocalDate.now().getYear();
+        int moisActuel = LocalDate.now().getMonthValue();
+
+        // ✅ Trouver la prochaine PÉRIODE GLOBALE à planifier
+        int prochainePeriodeGlobale = trouverProchainePeriodeGlobale(clients, anneeActuelle, moisActuel);
+
+        if (prochainePeriodeGlobale == -1) {
+            log.info("ℹ️ Toutes les visites sont planifiées pour tous les clients");
+            return 0;
+        }
+
+        log.info("📌 Prochaine période globale à planifier: Période {}", prochainePeriodeGlobale);
+
+        // ✅ Récupérer TOUS les sites de TOUS les clients
+        List<Site> tousLesSites = new ArrayList<>();
+        Map<Integer, Client> clientParSite = new HashMap<>();
+
+        for (Client client : clients) {
+            if (client.getNbVisitesAn() == null || client.getNbVisitesAn() <= 0) continue;
+            List<Site> sites = siteRepository.findByClientIdAndActifTrue(client.getId());
+            for (Site site : sites) {
+                tousLesSites.add(site);
+                clientParSite.put(site.getId(), client);
+                if (site.getLatitude() == null || site.getLongitude() == null) {
+                    geocodingService.geocodeSite(site);
+                    siteRepository.save(site);
+                }
+            }
+        }
+
+        // ✅ Trier par ZONE puis par distance
+        Site temara = new Site();
+        temara.setLatitude(33.9286);
+        temara.setLongitude(-6.9020);
+
+        tousLesSites.sort((s1, s2) -> {
+            String ville1 = extractVille(s1.getAdresse()).toLowerCase().trim();
+            String ville2 = extractVille(s2.getAdresse()).toLowerCase().trim();
+
+            String zone1 = "Autre";
+            String zone2 = "Autre";
+
+            if (zoneCentre.contains(ville1)) zone1 = "Centre";
+            else if (zoneNord.contains(ville1)) zone1 = "Nord";
+            else if (zoneSud.contains(ville1)) zone1 = "Sud";
+
+            if (zoneCentre.contains(ville2)) zone2 = "Centre";
+            else if (zoneNord.contains(ville2)) zone2 = "Nord";
+            else if (zoneSud.contains(ville2)) zone2 = "Sud";
+
+            int index1 = ordreZones.indexOf(zone1);
+            int index2 = ordreZones.indexOf(zone2);
+
+            if (index1 != index2) {
+                return Integer.compare(index1, index2);
+            }
+
+            double d1 = geocodingService.calculateDistance(temara, s1);
+            double d2 = geocodingService.calculateDistance(temara, s2);
+            return Double.compare(d1, d2);
+        });
+
+        log.info("📍 Ordre global des sites: {}",
+                tousLesSites.stream()
+                        .map(s -> extractVille(s.getAdresse()))
+                        .collect(Collectors.toList()));
+
+        // ✅ Date courante partagée (avance uniquement quand une visite est planifiée)
+        LocalDate currentDate = LocalDate.now().plusDays(1);
+        Set<LocalDate> datesUtilisees = new HashSet<>();
+
+        // ✅ Pour chaque site (dans l'ordre géographique)
+        for (Site site : tousLesSites) {
+            Client client = clientParSite.get(site.getId());
+            if (client == null) continue;
+
+            int nbVisitesAn = client.getNbVisitesAn() != null ? client.getNbVisitesAn() : 4;
+
+            // ✅ Déterminer le numéro de visite à planifier
+            int numVisiteAPlanifier = getNumeroVisitePourPeriode(prochainePeriodeGlobale, nbVisitesAn);
+            if (numVisiteAPlanifier == -1) {
+                // Ce site n'a pas de visite pour cette période (ex: 2 visites/an pour période 2 ou 4)
+                log.debug("   ⏭️ Site: {} - Période {} non applicable ({} visites/an)",
+                        site.getNom(), prochainePeriodeGlobale, nbVisitesAn);
+                continue;
+            }
+
+            // ✅ Déterminer l'année cible
+            int anneeCible = anneeActuelle;
+            if (prochainePeriodeGlobale >= 5 && prochainePeriodeGlobale <= 8) {
+                anneeCible = anneeActuelle + 1;
+            }
+
+            // ✅ Vérifier si cette visite existe déjà
+            List<Planning> planningsExistants = planningRepository.findBySite(site);
+            boolean existeDeja = false;
+            for (Planning p : planningsExistants) {
+                if (p.getNumVisite() != null && p.getNumVisite() == numVisiteAPlanifier
+                        && p.getStatut() != StatutVisite.ANNULE) {
+                    if (p.getDateProposee() != null && p.getDateProposee().getYear() == anneeCible) {
+                        existeDeja = true;
+                        break;
+                    }
+                }
+            }
+            if (existeDeja) {
+                log.info("   ⏭️ Site: {} - V{} déjà planifiée en {}", site.getNom(), numVisiteAPlanifier, anneeCible);
+                continue;
+            }
+
+            // ✅ Récupérer la période pour ce numéro de visite et ce client
+            HolidayService.Period period = holidayService.getPeriodForVisite(numVisiteAPlanifier, nbVisitesAn);
+            LocalDate dateDebutPeriode = LocalDate.of(anneeCible, period.moisDebut, 1);
+            LocalDate dateFinPeriode = LocalDate.of(anneeCible, period.moisFin, 1)
+                    .with(java.time.temporal.TemporalAdjusters.lastDayOfMonth());
+
+            // ✅ Chercher la première date disponible dans la période
+            // On commence par la date idéale (début de période) mais on doit être >= currentDate
+            LocalDate startSearch = dateDebutPeriode.isAfter(currentDate) ? dateDebutPeriode : currentDate;
+
+            LocalDate dateFinale = null;
+            for (LocalDate d = startSearch; !d.isAfter(dateFinPeriode); d = d.plusDays(1)) {
+                if (holidayService.isValidDateForVisit(d) && !datesUtilisees.contains(d)) {
+                    dateFinale = d;
+                    break;
+                }
+            }
+
+            if (dateFinale == null) {
+                log.warn("   ⚠️ Site: {} - Aucune date disponible dans la période {}-{} pour V{}",
+                        site.getNom(), dateDebutPeriode, dateFinPeriode, numVisiteAPlanifier);
+                continue;
+            }
+
+            // ✅ Marquer la date comme utilisée et avancer la date courante
+            datesUtilisees.add(dateFinale);
+            currentDate = dateFinale.plusDays(1);
+
+            // ✅ Créer la visite
+            Planning planning = new Planning();
+            planning.setSite(site);
+            planning.setNumVisite(numVisiteAPlanifier);
+            planning.setStatut(StatutVisite.EN_ATTENTE);
+            planning.setNbRelances(0);
+            planning.setDateEnvoi(LocalDateTime.now());
+            planning.setDateProposee(dateFinale);
+            planning.setDateVisite(dateFinale);
+
+            Planning saved = planningRepository.save(planning);
+            totalCrees++;
+
+            String numAffiche = getNumeroVisiteAffiche(numVisiteAPlanifier, nbVisitesAn);
+            double distance = geocodingService.calculateDistance(temara, site);
+            String ville = extractVille(site.getAdresse());
+            String zone = "Autre";
+            if (zoneCentre.contains(ville.toLowerCase())) zone = "Centre";
+            else if (zoneNord.contains(ville.toLowerCase())) zone = "Nord";
+            else if (zoneSud.contains(ville.toLowerCase())) zone = "Sud";
+
+            log.info("   ✅ {} - {} ({}) - Zone: {} - Distance: {:.1f} km - Date: {}",
+                    numAffiche, site.getNom(), ville, zone, distance, dateFinale);
+        }
+
+        log.info("✅ Planification terminée: {} visites créées", totalCrees);
+        return totalCrees;
+    }
+
+    /**
+     * ✅ Trouver la prochaine période globale à planifier
+     */
+    private int trouverProchainePeriodeGlobale(List<Client> clients, int anneeActuelle, int moisActuel) {
+        // ✅ Périodes globales (4 visites/an)
+        // 1 = V1, 2 = V2, 3 = V3, 4 = V4 pour l'année en cours
+        // 5 = V1 année suivante, 6 = V2 année suivante, 7 = V3 année suivante, 8 = V4 année suivante
+
+        // ✅ Déterminer la période en cours
+        int periodeEnCours = 1;
+        if (moisActuel >= 1 && moisActuel <= 3) periodeEnCours = 1;
+        else if (moisActuel >= 4 && moisActuel <= 6) periodeEnCours = 2;
+        else if (moisActuel >= 7 && moisActuel <= 9) periodeEnCours = 3;
+        else if (moisActuel >= 10 && moisActuel <= 12) periodeEnCours = 4;
+
+        log.info("📌 Période en cours: P{}", periodeEnCours);
+
+        // ✅ Vérifier si toutes les visites de l'année en cours sont planifiées
+        // Pour chaque période de 1 à 4, vérifier si tous les clients ont cette visite planifiée
+        for (int periode = periodeEnCours; periode <= 4; periode++) {
+            boolean toutesPlanifiees = true;
+            for (Client client : clients) {
+                if (client.getNbVisitesAn() == null || client.getNbVisitesAn() <= 0) continue;
+                List<Site> sites = siteRepository.findByClientIdAndActifTrue(client.getId());
+                for (Site site : sites) {
+                    // ✅ Déterminer le numéro de visite correspondant
+                    int numVisite = periode;
+                    if (client.getNbVisitesAn() == 2) {
+                        // ✅ Pour 2 visites/an : V1 ↔ période 1, V2 ↔ période 3
+                        if (periode == 1) numVisite = 1;
+                        else if (periode == 3) numVisite = 2;
+                        else continue; // Les périodes 2 et 4 n'existent pas pour 2 visites/an
+                    }
+
+                    List<Planning> plannings = planningRepository.findBySite(site);
+                    boolean existe = false;
+                    for (Planning p : plannings) {
+                        if (p.getNumVisite() != null && p.getNumVisite() == numVisite
+                                && p.getStatut() != StatutVisite.ANNULE) {
+                            if (p.getDateProposee() != null && p.getDateProposee().getYear() == anneeActuelle) {
+                                existe = true;
+                                break;
+                            }
+                        }
+                    }
+                    if (!existe) {
+                        toutesPlanifiees = false;
+                        break;
+                    }
+                }
+                if (!toutesPlanifiees) break;
+            }
+            if (!toutesPlanifiees) {
+                return periode;
+            }
+        }
+
+        // ✅ Si toutes les périodes de l'année en cours sont planifiées, passer à l'année suivante
+        for (int periode = 1; periode <= 4; periode++) {
+            boolean toutesPlanifiees = true;
+            for (Client client : clients) {
+                if (client.getNbVisitesAn() == null || client.getNbVisitesAn() <= 0) continue;
+                List<Site> sites = siteRepository.findByClientIdAndActifTrue(client.getId());
+                for (Site site : sites) {
+                    int numVisite = periode;
+                    if (client.getNbVisitesAn() == 2) {
+                        if (periode == 1) numVisite = 1;
+                        else if (periode == 3) numVisite = 2;
+                        else continue;
+                    }
+
+                    List<Planning> plannings = planningRepository.findBySite(site);
+                    boolean existe = false;
+                    for (Planning p : plannings) {
+                        if (p.getNumVisite() != null && p.getNumVisite() == numVisite
+                                && p.getStatut() != StatutVisite.ANNULE) {
+                            if (p.getDateProposee() != null && p.getDateProposee().getYear() == anneeActuelle + 1) {
+                                existe = true;
+                                break;
+                            }
+                        }
+                    }
+                    if (!existe) {
+                        toutesPlanifiees = false;
+                        break;
+                    }
+                }
+                if (!toutesPlanifiees) break;
+            }
+            if (!toutesPlanifiees) {
+                return periode + 4; // 5 = V1 an+1, 6 = V2 an+1, 7 = V3 an+1, 8 = V4 an+1
+            }
+        }
+
+        return -1;
+    }
+
+    /**
+     * ✅ Obtenir le numéro de visite pour une période donnée
+     */
+    private int getNumeroVisitePourPeriode(int periode, int nbVisitesAn) {
+        if (nbVisitesAn == 4) {
+            return periode % 4 == 0 ? 4 : periode % 4;
+        } else if (nbVisitesAn == 2) {
+            if (periode == 1 || periode == 5) return 1;
+            if (periode == 3 || periode == 7) return 2;
+            return -1;
+        }
+        return -1;
+    }
+
+    /**
+     * ✅ Obtenir le numéro de visite pour l'affichage
+     */
+    private String getNumeroVisiteAffiche(int numVisite, int nbVisitesAn) {
+        if (nbVisitesAn == 2) {
+            if (numVisite == 1) return "V1";
+            if (numVisite == 2) return "V2";
+        }
+        return "V" + numVisite;
+    }
+
+    /**
+     * ✅ Trouver la prochaine visite à planifier en respectant les périodes
+     * Retourne [numVisite, annee]
+     */
+    private int[] trouverProchaineVisiteAvecPeriode(List<Planning> planningsExistants, int nbVisitesAn, int moisActuel, int anneeActuelle) {
+        // ✅ 1. Récupérer tous les numéros existants par année
+        Set<Integer> numeros2026 = new HashSet<>();
+        Set<Integer> numeros2027 = new HashSet<>();
+
+        for (Planning p : planningsExistants) {
+            if (p.getNumVisite() == null || p.getStatut() == StatutVisite.ANNULE) continue;
+            if (p.getDateProposee() == null) continue;
+
+            int annee = p.getDateProposee().getYear();
+            if (annee == 2026) {
+                numeros2026.add(p.getNumVisite());
+            } else if (annee == 2027) {
+                numeros2027.add(p.getNumVisite());
+            }
+        }
+
+        // ✅ 2. Déterminer la période en cours
+        int periodeEnCours = 1;
+        if (moisActuel >= 1 && moisActuel <= 3) periodeEnCours = 1;  // V1
+        else if (moisActuel >= 4 && moisActuel <= 6) periodeEnCours = 2;  // V2
+        else if (moisActuel >= 7 && moisActuel <= 9) periodeEnCours = 3;  // V3
+        else if (moisActuel >= 10 && moisActuel <= 12) periodeEnCours = 4;  // V4
+
+        log.debug("   📌 Période en cours: V{}", periodeEnCours);
+
+        // ✅ 3. Vérifier si la période en cours est déjà planifiée pour 2026
+        boolean periodeEnCoursPlanifiee = numeros2026.contains(periodeEnCours);
+
+        // ✅ 4. Si la période en cours n'est pas planifiée, la planifier
+        if (!periodeEnCoursPlanifiee) {
+            return new int[]{periodeEnCours, anneeActuelle};
+        }
+
+        // ✅ 5. Si la période en cours est planifiée, chercher la prochaine période
+        // ✅ 5a. D'abord, vérifier les périodes suivantes dans la même année
+        for (int i = periodeEnCours + 1; i <= nbVisitesAn; i++) {
+            if (!numeros2026.contains(i)) {
+                return new int[]{i, anneeActuelle};
+            }
+        }
+
+        // ✅ 5b. Si toutes les périodes de 2026 sont planifiées, passer à 2027
+        for (int i = 1; i <= nbVisitesAn; i++) {
+            if (!numeros2027.contains(i)) {
+                return new int[]{i, anneeActuelle + 1};
+            }
+        }
+
+        // ✅ 5c. Si toutes les visites sont planifiées
+        return new int[]{-1, anneeActuelle};
+    }
+
+
+
+
+
+
+    /**
+     * ✅ Créer et sauvegarder une visite pour un site
+     */
+    private void creerEtSauvegarderVisite(Site site, int numVisite, LocalDate dateVisite) {
+        Planning planning = new Planning();
+        planning.setSite(site);
+        planning.setNumVisite(numVisite);
+        planning.setStatut(StatutVisite.EN_ATTENTE);
+        planning.setNbRelances(0);
+        planning.setDateEnvoi(LocalDateTime.now());
+        planning.setDateProposee(dateVisite);
+        planning.setDateVisite(dateVisite);
+
+        Planning saved = planningRepository.save(planning);
+        log.info("✅ V{} planifiée pour {} le {}", numVisite, site.getNom(), dateVisite);
+
+        try {
+            envoyerProposition(saved.getId());
+        } catch (Exception e) {
+            log.error("❌ Erreur envoi email: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * ✅ Calculer la date pour une année spécifique
+     */
+    private LocalDate calculerDateParPeriodePourAnnee(Client client, int numVisite, int annee) {
+        int nbVisitesAn = client.getNbVisitesAn() != null ? client.getNbVisitesAn() : 4;
+        HolidayService.Period period = holidayService.getPeriodForVisite(numVisite, nbVisitesAn);
+
+        LocalDate dateBase = LocalDate.of(annee, period.moisDebut, 1);
+
+        // ✅ Pour V3 (mois 7-9), exclure AOUT
+        LocalDate dateValide;
+        boolean isV3 = (period.moisDebut == 7 && period.moisFin == 9);
+        boolean isV2With2Visits = (nbVisitesAn == 2 && period.moisDebut == 7 && period.moisFin == 12);
+
+        if (isV3 || isV2With2Visits) {
+            dateValide = holidayService.findNextValidDateInPeriodExcludingAugust(dateBase, period.moisDebut, period.moisFin);
+        } else {
+            dateValide = holidayService.findNextValidDateInPeriod(dateBase, period.moisDebut, period.moisFin);
+        }
+
+        return dateValide;
     }
 
     // ============================================================
@@ -369,6 +784,7 @@ public class PlanningServiceImpl implements PlanningService {
             throw new RuntimeException("Erreur lors de la planification: " + e.getMessage());
         }
     }
+
     @Override
     @Transactional
     public int planifierVisitesPourTousLesClients() {
@@ -589,14 +1005,12 @@ public class PlanningServiceImpl implements PlanningService {
     /**
      * ✅ Planifier les visites par zone géographique (Agadir → Marrakech → Casablanca → Rabat)
      */
-    // service/impl/PlanningServiceImpl.java - REMPLACER COMPLÈTEMENT
-
     // service/impl/PlanningServiceImpl.java - REMPLACER COMPLÈTEMENT cette méthode
 
     @Transactional
     public void planifierVisitesParZone() {
         log.info("========================================");
-        log.info("📍 PLANIFICATION PAR ZONE GÉOGRAPHIQUE OPTIMISÉE");
+        log.info("📍 PLANIFICATION PAR ZONE AVEC RESPECT DES PÉRIODES");
         log.info("========================================");
 
         // ✅ 1. Récupérer toutes les visites à planifier
@@ -617,16 +1031,28 @@ public class PlanningServiceImpl implements PlanningService {
                             site.getNom(), site.getLatitude(), site.getLongitude());
                 }
 
-                Set<Integer> numerosExistants = getNumerosExistantsPourSite(site, anneeActuelle);
-                int prochainNum = trouverProchainNumManquant(numerosExistants, client.getNbVisitesAn());
+                int nbVisitesAn = client.getNbVisitesAn();
 
-                if (prochainNum != -1) {
+                // ✅ Parcourir TOUS les numéros de visite (1 à nbVisitesAn)
+                for (int numVisite = 1; numVisite <= nbVisitesAn; numVisite++) {
+                    // ✅ Vérifier si cette visite existe déjà pour ce site
+                    Set<Integer> numerosExistants = getNumerosExistantsPourSite(site, anneeActuelle);
+                    if (numerosExistants.contains(numVisite)) {
+                        continue; // Déjà planifiée
+                    }
+
+                    // ✅ Calculer la date selon la période
+                    LocalDate dateVisite = calculerDateParPeriode(client, numVisite);  // ✅ DÉCLARATION
+
                     Planning planning = new Planning();
                     planning.setSite(site);
-                    planning.setNumVisite(prochainNum);
+                    planning.setNumVisite(numVisite);
                     planning.setStatut(StatutVisite.EN_ATTENTE);
                     planning.setNbRelances(0);
                     planning.setDateEnvoi(LocalDateTime.now());
+                    planning.setDateProposee(dateVisite);
+                    planning.setDateVisite(dateVisite);
+
                     tousLesPlannings.add(planning);
                 }
             }
@@ -643,13 +1069,17 @@ public class PlanningServiceImpl implements PlanningService {
         Map<String, List<Planning>> zones = regrouperParZoneGeographique(tousLesPlannings);
         log.info("📍 {} zones identifiées: {}", zones.size(), zones.keySet());
 
-        // ✅ 3. Définir l'ordre OPTIMAL des zones
-        // 🔥 Changement : Centre → Sud → Nord (pour éviter le grand saut)
+        // ✅ 3. Pour chaque zone, trier par numéro de visite (V1, V2, V3, V4)
+        for (Map.Entry<String, List<Planning>> entry : zones.entrySet()) {
+            List<Planning> planningsZone = entry.getValue();
+            planningsZone.sort(Comparator.comparingInt(p -> p.getNumVisite() != null ? p.getNumVisite() : 0));
+        }
+
+        // ✅ 4. Définir l'ordre OPTIMAL des zones
         List<String> ordreZones = Arrays.asList("Centre", "Sud", "Nord", "Autre");
 
-        // ✅ 4. Planifier zone par zone avec pause
+        // ✅ 5. Planifier zone par zone
         Set<LocalDate> datesUtilisees = new HashSet<>();
-        LocalDate currentDate = LocalDate.now().plusDays(1);
 
         for (String zone : ordreZones) {
             if (!zones.containsKey(zone)) continue;
@@ -661,40 +1091,69 @@ public class PlanningServiceImpl implements PlanningService {
             List<Planning> zoneOptimisee = optimiserOrdreVisites(planningsZone);
 
             for (Planning planning : zoneOptimisee) {
-                while (!holidayService.isValidDateForVisit(currentDate) || datesUtilisees.contains(currentDate)) {
-                    currentDate = currentDate.plusDays(1);
+                // ✅ Recalculer la date selon la période (V1, V2, V3, V4)
+                Client client = planning.getSite().getClient();
+                int numVisite = planning.getNumVisite();
+
+                // ✅ Utiliser la date calculée par période
+                LocalDate dateCalculee = calculerDateParPeriode(client, numVisite);
+
+                // ✅ S'assurer que la date est valide et pas déjà utilisée
+                LocalDate dateFinale = dateCalculee;
+                int maxAttempts = 30;
+                while (maxAttempts > 0 && (!holidayService.isValidDateForVisit(dateFinale) || datesUtilisees.contains(dateFinale))) {
+                    dateFinale = dateFinale.plusDays(1);
+                    maxAttempts--;
                 }
 
-                planning.setDateProposee(currentDate);
-                planning.setDateVisite(currentDate);
-                datesUtilisees.add(currentDate);
+                planning.setDateProposee(dateFinale);
+                planning.setDateVisite(dateFinale);
+                datesUtilisees.add(dateFinale);
 
                 Planning saved = planningRepository.save(planning);
                 String ville = extractVille(saved.getSite().getAdresse());
+                String periode = getPeriodeLabel(numVisite, client.getNbVisitesAn());
 
-                log.info("   ✅ V{} - {} ({}) - Date: {}",
+                log.info("   ✅ V{} - {} ({}) - {} - Date: {}",
                         saved.getNumVisite(),
                         saved.getSite().getNom(),
                         ville,
-                        currentDate);
+                        periode,
+                        dateFinale);
 
                 try {
                     envoyerProposition(saved.getId());
                 } catch (Exception e) {
                     log.error("❌ Erreur envoi email: {}", e.getMessage());
                 }
-
-                currentDate = currentDate.plusDays(1);
             }
-
-            // ✅ Pause de 2 jours entre les zones (pour les longs trajets)
-            currentDate = currentDate.plusDays(2);
-            log.info("   📅 Pause de 2 jours entre les zones");
         }
 
         log.info("========================================");
         log.info("✅ PLANIFICATION PAR ZONE TERMINÉE");
         log.info("========================================");
+    }
+
+    /**
+     * ✅ Obtenir le libellé de la période pour une visite
+     */
+    private String getPeriodeLabel(int numVisite, int nbVisitesAn) {
+        if (nbVisitesAn == 4) {
+            switch (numVisite) {
+                case 1: return "Janv-Mars (V1)";
+                case 2: return "Avr-Juin (V2)";
+                case 3: return "Juil-Sept (V3)";
+                case 4: return "Oct-Déc (V4)";
+                default: return "Période inconnue";
+            }
+        } else if (nbVisitesAn == 2) {
+            switch (numVisite) {
+                case 1: return "Janv-Juin (V1)";
+                case 2: return "Juil-Déc (V2)";
+                default: return "Période inconnue";
+            }
+        }
+        return "Période inconnue";
     }
 
     // service/impl/PlanningServiceImpl.java - AJOUTER cette méthode
@@ -1573,6 +2032,58 @@ public class PlanningServiceImpl implements PlanningService {
         }
 
         LocalDate dateValide = holidayService.findNextValidDateInPeriod(dateBase, period.moisDebut, period.moisFin);
+
+        return dateValide;
+    }
+
+    private LocalDate calculerDateParPeriode(Client client, int numVisite) {
+        int nbVisitesAn = client.getNbVisitesAn() != null ? client.getNbVisitesAn() : 4;
+
+        HolidayService.Period period = holidayService.getPeriodForVisite(numVisite, nbVisitesAn);
+
+        LocalDate now = LocalDate.now();
+        int currentYear = now.getYear();
+        int currentMonth = now.getMonthValue();
+
+        // ✅ Déterminer l'année de planification
+        int yearToUse = currentYear;
+
+        // ✅ Pour V3 (mois 7-9), on vérifie si on est passé septembre
+        // Si on est en août, on reste en année en cours
+        if (currentMonth > period.moisFin) {
+            // Si le mois actuel est APRÈS la fin de la période → année suivante
+            yearToUse = currentYear + 1;
+            log.info("📌 Période {}-{} passée (mois actuel: {}), planification en {}",
+                    period.moisDebut, period.moisFin, currentMonth, yearToUse);
+        } else {
+            yearToUse = currentYear;
+            log.info("📌 Période {}-{} en cours ou future (mois actuel: {}), planification en {}",
+                    period.moisDebut, period.moisFin, currentMonth, yearToUse);
+        }
+
+        // ✅ Créer la date de base = début de la période
+        LocalDate dateBase = LocalDate.of(yearToUse, period.moisDebut, 1);
+
+        // ✅ Si la date est dans le passé, avancer d'un jour
+        if (dateBase.isBefore(now) || dateBase.isEqual(now)) {
+            dateBase = dateBase.plusDays(1);
+            log.info("📌 Date de base ajustée: {}", dateBase);
+        }
+
+        // ✅ Pour V3 (mois 7-9) et V2 (2 visites/an), exclure AOUT explicitement
+        LocalDate dateValide;
+        boolean isV3 = (period.moisDebut == 7 && period.moisFin == 9);
+        boolean isV2With2Visits = (nbVisitesAn == 2 && period.moisDebut == 7 && period.moisFin == 12);
+
+        if (isV3 || isV2With2Visits) {
+            dateValide = holidayService.findNextValidDateInPeriodExcludingAugust(dateBase, period.moisDebut, period.moisFin);
+            log.info("📌 V{} - Août exclu explicitement", numVisite);
+        } else {
+            dateValide = holidayService.findNextValidDateInPeriod(dateBase, period.moisDebut, period.moisFin);
+        }
+
+        log.info("📅 Visite V{} planifiée le {} (période: {}-{}, année: {})",
+                numVisite, dateValide, period.moisDebut, period.moisFin, yearToUse);
 
         return dateValide;
     }
