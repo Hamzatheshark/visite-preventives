@@ -1,4 +1,3 @@
-// App.js
 import React, { useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
@@ -12,136 +11,165 @@ import ClientList from './components/clients/ClientList';
 import ClientForm from './components/clients/ClientForm';
 import PlanningList from './components/planning/PlanningList';
 import PlanningCalendar from './components/planning/PlanningCalendar';
+import History from './components/planning/History';
 import PieceInterventionList from './components/interventions/PieceInterventionList';
+import UploadPiece from './components/interventions/UploadPiece';
 import Login from './components/users/Login';
 import Register from './components/users/Register';
 import Profile from './components/users/Profile';
+import UserList from './components/users/UserList';
 import { AuthProvider } from './context/AuthContext';
 
-// ===== NOUVEAUX IMPORTS =====
+// ===== IMPORTS TECHNICIENS =====
 import TechnicianList from './components/technicians/TechnicianList';
 import AssignTechnician from './components/technicians/AssignTechnician';
-import UserList from './components/users/UserList';
+import TechnicienUpcoming from './components/technicien/TechnicienUpcoming';
+import TechnicienPending from './components/technicien/TechnicienPending';
+import TechnicienCurrent from './components/technicien/TechnicienCurrent';
+import TechnicienCompleted from './components/technicien/TechnicienCompleted';
+import TechnicienHistory from './components/technicien/TechnicienHistory';
+
+// ===== IMPORTS RESPONSABLES =====
+import ResponsableUpcoming from './components/responsable/ResponsableUpcoming';
+import ResponsablePending from './components/responsable/ResponsablePending';
+import ResponsableCurrent from './components/responsable/ResponsableCurrent';
+import ResponsableCompleted from './components/responsable/ResponsableCompleted';
+import ResponsableHistory from './components/responsable/ResponsableHistory';
+
+// ===== AUTRES IMPORTS =====
 import Emails from './components/emails/Emails';
 import Stats from './components/stats/Stats';
 import ImportExport from './components/importexport/ImportExport';
 import Notifications from './components/notifications/NotificationList';
+import SiteList from './components/sites/SiteList';
 
 // ===== THÈME =====
 const theme = createTheme({
-  palette: {
-    primary: { main: '#0044CC' },
-    secondary: { main: '#FF6B00' },
-  },
+    palette: {
+        primary: { main: '#0044CC' },
+        secondary: { main: '#FF6B00' },
+    },
 });
 
 // ===== COMPOSANT PLACEHOLDER =====
 const PagePlaceholder = ({ title }) => {
-  return (
-      <Box sx={{ p: 3 }}>
-        <Paper sx={{ p: 3, textAlign: 'center' }}>
-          <Typography variant="h4" gutterBottom>{title}</Typography>
-          <Typography variant="body1" color="text.secondary">
-            Cette page est en cours de développement
-          </Typography>
-        </Paper>
-      </Box>
-  );
+    return (
+        <Box sx={{ p: 3 }}>
+            <Paper sx={{ p: 3, textAlign: 'center' }}>
+                <Typography variant="h4" gutterBottom>{title}</Typography>
+                <Typography variant="body1" color="text.secondary">
+                    Cette page est en cours de développement
+                </Typography>
+            </Paper>
+        </Box>
+    );
 };
 
 // ===== APP CONTENT =====
 const AppContent = () => {
-  const [sidebarOpen, setSidebarOpen] = useState(true);
-  const location = useLocation();
-  const hideNavbarPages = ['/login', '/register', '/'];
-  const shouldHideNavbar = hideNavbarPages.includes(location.pathname);
+    const [sidebarOpen, setSidebarOpen] = useState(true);
+    const location = useLocation();
+    const hideNavbarPages = ['/login', '/register', '/'];
+    const shouldHideNavbar = hideNavbarPages.includes(location.pathname);
 
-  return (
-      <>
-        {!shouldHideNavbar && <Navbar onMenuClick={() => setSidebarOpen(!sidebarOpen)} />}
-        <Box sx={{ display: 'flex' }}>
-          {!shouldHideNavbar && <Sidebar open={sidebarOpen} />}
-          <Box
-              component="main"
-              sx={{
-                flexGrow: 1,
-                p: 3,
-                ml: !shouldHideNavbar && sidebarOpen ? '240px' : 0,
-                transition: 'margin 0.3s ease',
-                mt: !shouldHideNavbar ? '64px' : 0,
-              }}
-          >
-            <Routes>
-              {/* ===== ROUTES PUBLIQUES ===== */}
-              <Route path="/" element={<Home />} />
-              <Route path="/login" element={<Login />} />
-              <Route path="/register" element={<Register />} />
+    return (
+        <>
+            {!shouldHideNavbar && <Navbar onMenuClick={() => setSidebarOpen(!sidebarOpen)} />}
+            <Box sx={{ display: 'flex' }}>
+                {!shouldHideNavbar && <Sidebar open={sidebarOpen} />}
+                <Box
+                    component="main"
+                    sx={{
+                        flexGrow: 1,
+                        p: 3,
+                        ml: !shouldHideNavbar && sidebarOpen ? '240px' : 0,
+                        transition: 'margin 0.3s ease',
+                        mt: !shouldHideNavbar ? '64px' : 0,
+                    }}
+                >
+                    <Routes>
+                        {/* ===== ROUTES PUBLIQUES ===== */}
+                        <Route path="/" element={<Home />} />
+                        <Route path="/login" element={<Login />} />
+                        <Route path="/register" element={<Register />} />
 
-              {/* ===== ROUTES ADMIN ===== */}
-              <Route path="/dashboard" element={<Dashboard />} />
-              <Route path="/clients" element={<ClientList />} />
-              <Route path="/clients/new" element={<ClientForm />} />
-              <Route path="/clients/edit/:id" element={<ClientForm />} />
-              <Route path="/plannings" element={<PlanningList />} />
-              <Route path="/calendar" element={<PlanningCalendar />} />
-              <Route path="/pieces" element={<PieceInterventionList />} />
-              <Route path="/technicians" element={<TechnicianList />} />
-              <Route path="/assign-technicians" element={<AssignTechnician />} />
-              <Route path="/users" element={<UserList />} />
-              <Route path="/users/responsables" element={<UserList role="RESPONSABLE_SOFTWARE" />} />
-              <Route path="/users/technicians" element={<UserList role="TECHNICIEN_HARDWARE" />} />
-              <Route path="/users/admins" element={<UserList role="ADMIN" />} />
-              <Route path="/import" element={<ImportExport />} />
-              <Route path="/export" element={<ImportExport />} />
+                        {/* ===== ROUTES ADMIN ===== */}
+                        <Route path="/dashboard" element={<Dashboard />} />
+                        <Route path="/clients" element={<ClientList />} />
+                        <Route path="/clients/new" element={<ClientForm />} />
+                        <Route path="/clients/edit/:id" element={<ClientForm />} />
+                        <Route path="/plannings" element={<PlanningList />} />
+                        <Route path="/calendar" element={<PlanningCalendar />} />
+                        <Route path="/history" element={<History />} />
+                        <Route path="/pieces" element={<PieceInterventionList />} />
+                        <Route path="/upload-pi/:planningId" element={<UploadPiece />} />
+                        <Route path="/sites" element={<SiteList />} />
 
-              {/* ===== ROUTES ADMIN - PAGES EN DÉVELOPPEMENT ===== */}
-              <Route path="/history" element={<PagePlaceholder title="Historique des visites" />} />
-              <Route path="/pieces/pending" element={<PagePlaceholder title="Pièces d'intervention - À valider" />} />
-              <Route path="/reports" element={<PagePlaceholder title="Rapports" />} />
-              <Route path="/notifications" element={<Notifications />} />
-              <Route path="/settings" element={<PagePlaceholder title="Paramètres" />} />
+                        {/* ===== ROUTES UTILISATEURS ===== */}
+                        <Route path="/users" element={<UserList />} />
+                        <Route path="/users/responsables" element={<UserList role="RESPONSABLE_SOFTWARE" />} />
+                        <Route path="/users/technicians" element={<UserList role="TECHNICIEN_HARDWARE" />} />
+                        <Route path="/users/admins" element={<UserList role="ADMIN" />} />
 
-              {/* ===== ROUTES RESPONSABLE ===== */}
-              <Route path="/visits/pending" element={<PagePlaceholder title="Visites - En attente" />} />
-              <Route path="/visits/confirmed" element={<PagePlaceholder title="Visites - Confirmées" />} />
-              <Route path="/visits/refused" element={<PagePlaceholder title="Visites - Refusées" />} />
-              <Route path="/visits/reshcedule" element={<PagePlaceholder title="Visites - À reprogrammer" />} />
-              <Route path="/emails" element={<Emails />} />
-              <Route path="/emails/send" element={<Emails />} />
-              <Route path="/emails/relances" element={<Emails />} />
-              <Route path="/emails/history" element={<Emails />} />
-              <Route path="/stats" element={<Stats />} />
+                        {/* ===== ROUTES TECHNICIENS ===== */}
+                        <Route path="/technicians" element={<TechnicianList />} />
+                        <Route path="/assign-technicians" element={<AssignTechnician />} />
 
-              {/* ===== ROUTES TECHNICIEN ===== */}
-              <Route path="/my-planning" element={<PagePlaceholder title="Mon planning" />} />
-              <Route path="/my-visits" element={<PagePlaceholder title="Mes visites" />} />
-              <Route path="/visit-details" element={<PagePlaceholder title="Détails de la visite" />} />
-              <Route path="/my-history" element={<PagePlaceholder title="Historique" />} />
+                        {/* ===== ROUTES IMPORT/EXPORT ===== */}
+                        <Route path="/import" element={<ImportExport />} />
+                        <Route path="/export" element={<ImportExport />} />
 
-              {/* ===== ROUTE PROFIL ===== */}
-              <Route path="/profile" element={<Profile />} />
+                        {/* ===== ROUTES NOTIFICATIONS ===== */}
+                        <Route path="/notifications" element={<Notifications />} />
+                        <Route path="/settings" element={<PagePlaceholder title="Paramètres" />} />
 
-              {/* ===== ROUTE 404 ===== */}
-              <Route path="*" element={<Navigate to="/" />} />
-            </Routes>
-          </Box>
-        </Box>
-      </>
-  );
+                        {/* ===== ROUTES RESPONSABLE ===== */}
+                        <Route path="/responsable-upcoming" element={<ResponsableUpcoming />} />
+                        <Route path="/responsable-pending" element={<ResponsablePending />} />
+                        <Route path="/responsable-current" element={<ResponsableCurrent />} />
+                        <Route path="/responsable-completed" element={<ResponsableCompleted />} />
+                        <Route path="/responsable-history" element={<ResponsableHistory />} />
+
+                        {/* ===== ROUTES TECHNICIEN ===== */}
+                        <Route path="/technicien-upcoming" element={<TechnicienUpcoming />} />
+                        <Route path="/technicien-pending" element={<TechnicienPending />} />
+                        <Route path="/technicien-current" element={<TechnicienCurrent />} />
+                        <Route path="/technicien-completed" element={<TechnicienCompleted />} />
+                        <Route path="/technicien-history" element={<TechnicienHistory />} />
+
+                        {/* ===== ROUTES EMAILS ===== */}
+                        <Route path="/emails" element={<Emails />} />
+                        <Route path="/emails/send" element={<Emails />} />
+                        <Route path="/emails/relances" element={<Emails />} />
+                        <Route path="/emails/history" element={<Emails />} />
+
+                        {/* ===== ROUTES STATS ===== */}
+                        <Route path="/stats" element={<Stats />} />
+
+                        {/* ===== ROUTE PROFIL ===== */}
+                        <Route path="/profile" element={<Profile />} />
+
+                        {/* ===== ROUTE 404 ===== */}
+                        <Route path="*" element={<Navigate to="/" />} />
+                    </Routes>
+                </Box>
+            </Box>
+        </>
+    );
 };
 
 // ===== APP =====
 function App() {
-  return (
-      <ThemeProvider theme={theme}>
-        <CssBaseline />
-        <AuthProvider>
-          <Router>
-            <AppContent />
-          </Router>
-        </AuthProvider>
-      </ThemeProvider>
-  );
+    return (
+        <ThemeProvider theme={theme}>
+            <CssBaseline />
+            <AuthProvider>
+                <Router>
+                    <AppContent />
+                </Router>
+            </AuthProvider>
+        </ThemeProvider>
+    );
 }
 
 export default App;

@@ -1,3 +1,4 @@
+// components/users/Login.js - Version corrigée
 import React, { useState } from 'react';
 import {
     Box,
@@ -29,36 +30,64 @@ const Login = () => {
         setLoading(true);
 
         try {
-            const response = await api.post('/auth/login', { email, motPasse: password });
+            console.log('📤 Tentative de login:', email);
+
+            const response = await api.post('/auth/login', {
+                email,
+                motPasse: password
+            });
+
             console.log('📥 Réponse login:', response.data);
 
-            if (response.data && response.data.user) {
+            if (response.data) {
+                // ✅ Récupérer le token
+                const token = response.data.token;
                 const userData = response.data.user;
-                console.log('👤 Utilisateur:', userData);
-                console.log('🔑 Rôle reçu:', userData.role);
 
-                // Vérifier que le rôle existe
-                if (!userData.role) {
-                    console.warn('⚠️ Aucun rôle reçu !');
+                console.log('🔑 Token reçu:', token ? '✅ Oui' : '❌ Non');
+                console.log('👤 Utilisateur:', userData);
+                console.log('🔑 Rôle:', userData?.role);
+
+                // ✅ STOCKER LE TOKEN (IMPORTANT !)
+                if (token) {
+                    localStorage.setItem('token', token);
+                    console.log('✅ Token stocké dans localStorage');
+                } else {
+                    console.warn('⚠️ Aucun token reçu');
+                    // Créer un token temporaire pour le test
+                    const tempToken = 'temp-token-' + Date.now();
+                    localStorage.setItem('token', tempToken);
+                    console.log('✅ Token temporaire créé:', tempToken);
                 }
 
-                // Stocker l'utilisateur
+                // ✅ STOCKER L'UTILISATEUR
+                if (userData) {
+                    localStorage.setItem('user', JSON.stringify(userData));
+                    console.log('✅ Utilisateur stocké');
+                }
+
+                // ✅ Mettre à jour le contexte
                 login(userData);
 
-                // Vérifier le stockage
-                const stored = localStorage.getItem('user');
-                console.log('📦 Stocké dans localStorage:', stored);
+                // ✅ Vérifier que tout est bien stocké
+                const storedToken = localStorage.getItem('token');
+                console.log('📦 Vérification - Token stocké:', storedToken ? '✅ Oui' : '❌ Non');
 
+                // Rediriger vers le dashboard
                 navigate('/dashboard');
             } else {
                 setError('Erreur de connexion');
             }
         } catch (error) {
             console.error('❌ Erreur login:', error);
+            console.error('❌ Détails:', error.response?.data);
+
             if (error.response?.data?.message) {
                 setError(error.response.data.message);
-            } else {
+            } else if (error.response?.status === 401) {
                 setError('Email ou mot de passe incorrect');
+            } else {
+                setError('Erreur de connexion au serveur');
             }
         } finally {
             setLoading(false);
@@ -145,12 +174,6 @@ const Login = () => {
                             <Link component={RouterLink} to="/register" sx={{ fontWeight: 'bold' }}>
                                 S'inscrire
                             </Link>
-                        </Typography>
-                    </Box>
-
-                    <Box sx={{ mt: 2, textAlign: 'center' }}>
-                        <Typography variant="caption" color="textSecondary">
-                            💡 Demo: admin@rms.com / admin123
                         </Typography>
                     </Box>
                 </Paper>

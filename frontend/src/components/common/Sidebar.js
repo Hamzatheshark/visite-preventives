@@ -1,4 +1,4 @@
-// components/common/Sidebar.js - COMPLET CORRIGÉ
+// components/common/Sidebar.js - VERSION COMPLETE CORRIGEE
 import React, { useState, useEffect } from 'react';
 import {
     Drawer,
@@ -33,6 +33,12 @@ import {
     ManageAccounts,
     Construction,
     Assignment,
+    CheckCircle,
+    Cancel,
+    Pending,
+    Schedule,
+    Work,
+    AssignmentInd,
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
@@ -46,6 +52,10 @@ const Sidebar = ({ open }) => {
     const { user, logout } = useAuth();
     const [userRole, setUserRole] = useState(null);
     const [notificationCount, setNotificationCount] = useState(0);
+
+    // États pour les sous-menus
+    const [openVisits, setOpenVisits] = useState(true);
+    const [openTeam, setOpenTeam] = useState(false);
 
     useEffect(() => {
         let role = user?.role;
@@ -80,15 +90,14 @@ const Sidebar = ({ open }) => {
     const isResponsable = userRole === 'RESPONSABLE_SOFTWARE';
     const isTechnicien = userRole === 'TECHNICIEN_HARDWARE' || userRole === 'TECHNICEN_HARDWARE';
 
-    // État pour les sous-menus
-    const [openVisits, setOpenVisits] = useState(true);
-
     const handleLogout = () => {
         logout();
         navigate('/login');
     };
 
-    // ===== MENU ADMIN (complet) =====
+    // ============================================
+    // ===== MENU ADMIN =====
+    // ============================================
     const adminMenu = [
         { text: 'Dashboard', icon: <Dashboard />, path: '/dashboard', divider: false },
         { divider: true },
@@ -103,7 +112,6 @@ const Sidebar = ({ open }) => {
                 { text: 'Calendrier', path: '/calendar' },
             ]
         },
-        // ✅ Supprimer "Équipe", garder directement "Utilisateurs"
         { text: 'Utilisateurs', icon: <People />, path: '/users', divider: false },
         { text: 'Pièces d\'intervention', icon: <AttachFile />, path: '/pieces', divider: false },
         { divider: true },
@@ -120,19 +128,46 @@ const Sidebar = ({ open }) => {
         },
     ];
 
+    // ============================================
     // ===== MENU RESPONSABLE SOFTWARE =====
+    // ============================================
     const responsableMenu = [
         {
-            text: 'Mes visites',
+            text: '📍 Mes visites',
             icon: <Assignment />,
             open: openVisits,
             setOpen: setOpenVisits,
             subItems: [
-                { text: 'À venir', path: '/responsable-upcoming' },
-                { text: 'En attente', path: '/responsable-pending' },
-                { text: 'En cours', path: '/responsable-current' },
-                { text: 'Terminées', path: '/responsable-completed' },
-                { text: 'Historique', path: '/responsable-history' },
+                {
+                    text: 'À venir',
+                    path: '/responsable-upcoming',
+                    icon: <Schedule fontSize="small" />,
+                    description: 'Visites planifiées'
+                },
+                {
+                    text: 'En attente',
+                    path: '/responsable-pending',
+                    icon: <Pending fontSize="small" />,
+                    description: 'À valider'
+                },
+                {
+                    text: 'En cours',
+                    path: '/responsable-current',
+                    icon: <Work fontSize="small" />,
+                    description: 'Visites en cours'
+                },
+                {
+                    text: 'Terminées',
+                    path: '/responsable-completed',
+                    icon: <CheckCircle fontSize="small" />,
+                    description: 'Visites réalisées'
+                },
+                {
+                    text: 'Historique',
+                    path: '/responsable-history',
+                    icon: <History fontSize="small" />,
+                    description: 'Toutes les visites'
+                },
             ]
         },
         {
@@ -147,19 +182,46 @@ const Sidebar = ({ open }) => {
         },
     ];
 
+    // ============================================
     // ===== MENU TECHNICIEN HARDWARE =====
+    // ============================================
     const technicienMenu = [
         {
-            text: 'Mes visites',
-            icon: <Assignment />,
+            text: '🔧 Mes visites',
+            icon: <Construction />,
             open: openVisits,
             setOpen: setOpenVisits,
             subItems: [
-                { text: 'À venir', path: '/technicien-upcoming' },
-                { text: 'En attente', path: '/technicien-pending' },
-                { text: 'En cours', path: '/technicien-current' },
-                { text: 'Terminées', path: '/technicien-completed' },
-                { text: 'Historique', path: '/technicien-history' },
+                {
+                    text: 'À venir',
+                    path: '/technicien-upcoming',
+                    icon: <Schedule fontSize="small" />,
+                    description: 'Mes prochaines visites'
+                },
+                {
+                    text: 'En attente',
+                    path: '/technicien-pending',
+                    icon: <Pending fontSize="small" />,
+                    description: 'À confirmer'
+                },
+                {
+                    text: 'En cours',
+                    path: '/technicien-current',
+                    icon: <Work fontSize="small" />,
+                    description: 'Mes visites en cours'
+                },
+                {
+                    text: 'Terminées',
+                    path: '/technicien-completed',
+                    icon: <CheckCircle fontSize="small" />,
+                    description: 'Mes visites réalisées'
+                },
+                {
+                    text: 'Historique',
+                    path: '/technicien-history',
+                    icon: <History fontSize="small" />,
+                    description: 'Mon historique'
+                },
             ]
         },
         {
@@ -174,6 +236,7 @@ const Sidebar = ({ open }) => {
         },
     ];
 
+    // Sélection du menu selon le rôle
     let menuItems = [];
     let roleLabel = 'Utilisateur';
     let roleColor = '#666';
@@ -215,7 +278,10 @@ const Sidebar = ({ open }) => {
                 <div key={index}>
                     <ListItem button onClick={() => setIsOpen(!isOpen)}>
                         <ListItemIcon>{item.icon}</ListItemIcon>
-                        <ListItemText primary={item.text} />
+                        <ListItemText
+                            primary={item.text}
+                            secondary={item.description}
+                        />
                         {isOpen ? <ExpandLess /> : <ExpandMore />}
                     </ListItem>
                     <Collapse in={isOpen} timeout="auto" unmountOnExit>
@@ -229,9 +295,12 @@ const Sidebar = ({ open }) => {
                                     selected={location.pathname === sub.path}
                                 >
                                     <ListItemIcon sx={{ minWidth: 30 }}>
-                                        <ListIcon fontSize="small" />
+                                        {sub.icon || <ListIcon fontSize="small" />}
                                     </ListItemIcon>
-                                    <ListItemText primary={sub.text} />
+                                    <ListItemText
+                                        primary={sub.text}
+                                        secondary={sub.description}
+                                    />
                                 </ListItem>
                             ))}
                         </List>

@@ -1,4 +1,3 @@
-// controller/EmailWebhookController.java
 package com.example.visite.controller;
 
 import com.example.visite.service.PlanningService;
@@ -20,29 +19,102 @@ public class EmailWebhookController {
 
     @GetMapping("/reponse/{token}")
     public ResponseEntity<String> traiterReponseEmail(@PathVariable String token) {
+        log.info("========================================");
+        log.info("📧 TRAITEMENT DE LA RÉPONSE CLIENT");
+        log.info("========================================");
+        log.info("📧 Token reçu: '{}'", token);
+        log.info("📧 Longueur du token: {}", token != null ? token.length() : 0);
+
         try {
-            String decoded = new String(Base64.getDecoder().decode(token));
+            // ✅ 1. Vérifier que le token n'est pas vide
+            if (token == null || token.trim().isEmpty()) {
+                log.error("❌ Token vide ou null");
+                return ResponseEntity.badRequest()
+                        .header("Content-Type", "text/html;charset=UTF-8")
+                        .body(buildErrorHtmlResponse("Token invalide ou manquant"));
+            }
+
+            // ✅ 2. Nettoyer le token (supprimer les espaces et caractères invisibles)
+            String cleanToken = token.trim().replaceAll("\\s+", "");
+            log.info("📧 Token nettoyé: '{}'", cleanToken);
+
+            // ✅ 3. Décoder le token (support URL-safe + standard)
+            String decoded = null;
+            try {
+                // Essayer d'abord avec URL-safe decoder (pour les tokens de l'email)
+                try {
+                    decoded = new String(Base64.getUrlDecoder().decode(cleanToken));
+                    log.info("📧 Décodé avec URL-safe decoder: '{}'", decoded);
+                } catch (IllegalArgumentException e) {
+                    // Si ça échoue, essayer avec le decoder standard
+                    log.warn("⚠️ Échec du décodage URL-safe, tentative avec le decoder standard");
+                    decoded = new String(Base64.getDecoder().decode(cleanToken));
+                    log.info("📧 Décodé avec decoder standard: '{}'", decoded);
+                }
+            } catch (IllegalArgumentException e) {
+                log.error("❌ Erreur de décodage Base64: {}", e.getMessage());
+                return ResponseEntity.badRequest()
+                        .header("Content-Type", "text/html;charset=UTF-8")
+                        .body(buildErrorHtmlResponse("Token invalide (format Base64 incorrect)"));
+            }
+
+            // ✅ 4. Extraire les informations du token
             String[] parts = decoded.split(":");
-            Integer planningId = Integer.parseInt(parts[0]);
-            boolean accepte = Boolean.parseBoolean(parts[1]);
+            if (parts.length != 2) {
+                log.error("❌ Format du token invalide. Attendu: 'id:boolean', Reçu: '{}'", decoded);
+                return ResponseEntity.badRequest()
+                        .header("Content-Type", "text/html;charset=UTF-8")
+                        .body(buildErrorHtmlResponse("Format de token invalide"));
+            }
 
+            Integer planningId;
+            boolean accepte;
+
+            try {
+                planningId = Integer.parseInt(parts[0].trim());
+                accepte = Boolean.parseBoolean(parts[1].trim());
+                log.info("📧 Planning ID: {}", planningId);
+                log.info("📧 Réponse: {}", accepte ? "ACCEPTE ✅" : "REFUSE ❌");
+            } catch (NumberFormatException e) {
+                log.error("❌ ID de planning invalide: '{}'", parts[0]);
+                return ResponseEntity.badRequest()
+                        .header("Content-Type", "text/html;charset=UTF-8")
+                        .body(buildErrorHtmlResponse("ID de visite invalide: " + parts[0]));
+            }
+
+            // ✅ 5. Vérifier que le planning existe
+            try {
+                planningService.getPlanningById(planningId);
+                log.info("✅ Planning trouvé: ID {}", planningId);
+            } catch (Exception e) {
+                log.error("❌ Planning non trouvé: {}", planningId);
+                return ResponseEntity.badRequest()
+                        .header("Content-Type", "text/html;charset=UTF-8")
+                        .body(buildErrorHtmlResponse("Visite non trouvée (ID: " + planningId + ")"));
+            }
+
+            // ✅ 6. Traiter la réponse
+            log.info("📧 Traitement de la réponse pour la visite ID: {}", planningId);
             planningService.traiterReponseClient(planningId, accepte);
+            log.info("✅ Réponse traitée avec succès pour la visite {}", planningId);
 
+            // ✅ 7. Retourner la page HTML de confirmation
             String htmlResponse = buildHtmlResponse(accepte);
-
             return ResponseEntity.ok()
                     .header("Content-Type", "text/html;charset=UTF-8")
                     .body(htmlResponse);
 
         } catch (Exception e) {
-            log.error("Erreur traitement réponse:", e);
-            return ResponseEntity.ok()
+            log.error("❌ Erreur lors du traitement de la réponse: {}", e.getMessage(), e);
+            return ResponseEntity.internalServerError()
                     .header("Content-Type", "text/html;charset=UTF-8")
-                    .body(buildErrorHtmlResponse(e.getMessage()));
+                    .body(buildErrorHtmlResponse("Erreur interne: " + e.getMessage()));
         }
     }
 
     private String buildHtmlResponse(boolean accepte) {
+        // ... votre code existant (inchangé) ...
+        // Je garde le même code que vous aviez
         if (accepte) {
             return "<!DOCTYPE html>\n" +
                     "<html lang=\"fr\">\n" +

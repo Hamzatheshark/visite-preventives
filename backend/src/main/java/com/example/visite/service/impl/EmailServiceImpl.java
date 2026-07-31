@@ -226,54 +226,56 @@ public class EmailServiceImpl implements EmailService {
     private String buildPropositionEmail(Planning planning) {
         DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy");
 
-        String acceptToken = Base64.getEncoder().encodeToString(
+        // ✅ UTILISER URL-Safe Base64 SANS PADDING
+        // Évite les caractères +, /, = qui peuvent être modifiés par les clients email
+        String acceptToken = Base64.getUrlEncoder().withoutPadding().encodeToString(
                 (planning.getId() + ":true").getBytes()
         );
-        String refuseToken = Base64.getEncoder().encodeToString(
+        String refuseToken = Base64.getUrlEncoder().withoutPadding().encodeToString(
                 (planning.getId() + ":false").getBytes()
         );
 
         String baseUrl = "http://localhost:8080/api/emails/reponse/";
 
         return String.format("""
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-                <h2 style="color: #0044CC;">RMS - Systèmes de Pointage</h2>
-                <p>Bonjour,</p>
-                <p>Dans le cadre de votre contrat de maintenance, nous vous proposons une visite préventive pour le site suivant :</p>
-                <table style="width: 100%%; border-collapse: collapse; margin: 15px 0;">
-                    <tr>
-                        <td style="padding: 8px; background-color: #f2f2f2; width: 30%%;"><strong>Site</strong></td>
-                        <td style="padding: 8px;">%s</td>
-                    </tr>
-                    <tr>
-                        <td style="padding: 8px; background-color: #f2f2f2;"><strong>Adresse</strong></td>
-                        <td style="padding: 8px;">%s</td>
-                    </tr>
-                    <tr>
-                        <td style="padding: 8px; background-color: #f2f2f2;"><strong>Date proposée</strong></td>
-                        <td style="padding: 8px;"><strong>%s</strong></td>
-                    </tr>
-                    <tr>
-                        <td style="padding: 8px; background-color: #f2f2f2;"><strong>Visite n°</strong></td>
-                        <td style="padding: 8px;">%d</td>
-                    </tr>
-                </table>
-                <div style="background-color: #e8f4fd; padding: 20px; border-radius: 8px; margin: 20px 0; text-align: center;">
-                    <h3 style="margin-top: 0; color: #0044CC;">Confirmez votre disponibilité</h3>
-                    <div style="display: flex; justify-content: center; gap: 20px; margin-top: 15px;">
-                        <a href="%s" style="background: #4CAF50; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block;">
-                            ✅ Accepter
-                        </a>
-                        <a href="%s" style="background: #f44336; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block;">
-                            ❌ Refuser
-                        </a>
-                    </div>
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+            <h2 style="color: #0044CC;">RMS - Systèmes de Pointage</h2>
+            <p>Bonjour,</p>
+            <p>Dans le cadre de votre contrat de maintenance, nous vous proposons une visite préventive pour le site suivant :</p>
+            <table style="width: 100%%; border-collapse: collapse; margin: 15px 0;">
+                <tr>
+                    <td style="padding: 8px; background-color: #f2f2f2; width: 30%%;"><strong>Site</strong></td>
+                    <td style="padding: 8px;">%s</td>
+                </tr>
+                <tr>
+                    <td style="padding: 8px; background-color: #f2f2f2;"><strong>Adresse</strong></td>
+                    <td style="padding: 8px;">%s</td>
+                </tr>
+                <tr>
+                    <td style="padding: 8px; background-color: #f2f2f2;"><strong>Date proposée</strong></td>
+                    <td style="padding: 8px;"><strong>%s</strong></td>
+                </tr>
+                <tr>
+                    <td style="padding: 8px; background-color: #f2f2f2;"><strong>Visite n°</strong></td>
+                    <td style="padding: 8px;">%d</td>
+                </tr>
+            </table>
+            <div style="background-color: #e8f4fd; padding: 20px; border-radius: 8px; margin: 20px 0; text-align: center;">
+                <h3 style="margin-top: 0; color: #0044CC;">Confirmez votre disponibilité</h3>
+                <div style="display: flex; justify-content: center; gap: 20px; margin-top: 15px;">
+                    <a href="%s" style="background: #4CAF50; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block;">
+                        ✅ Accepter
+                    </a>
+                    <a href="%s" style="background: #f44336; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block;">
+                        ❌ Refuser
+                    </a>
                 </div>
-                <p style="color: #666; font-size: 12px;">Veuillez répondre dans un délai de 7 jours.</p>
-                <hr style="border: 1px solid #eee;">
-                <p style="color: #888; font-size: 12px;">Cordialement,<br>L'équipe RMS</p>
             </div>
-            """,
+            <p style="color: #666; font-size: 12px;">Veuillez répondre dans un délai de 7 jours.</p>
+            <hr style="border: 1px solid #eee;">
+            <p style="color: #888; font-size: 12px;">Cordialement,<br>L'équipe RMS</p>
+        </div>
+        """,
                 planning.getSite().getNom(),
                 planning.getSite().getAdresse() != null ? planning.getSite().getAdresse() : "Non spécifiée",
                 planning.getDateProposee().format(dateFormatter),

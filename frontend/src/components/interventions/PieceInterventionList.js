@@ -1,4 +1,3 @@
-// components/interventions/PieceInterventionList.js - Version corrigée
 import React, { useState, useEffect } from 'react';
 import {
     Box,
@@ -22,6 +21,7 @@ import {
     Tooltip,
     TextField,
     InputAdornment,
+    Snackbar,
 } from '@mui/material';
 import {
     CloudUpload,
@@ -47,18 +47,16 @@ const PieceInterventionList = () => {
     const [visites, setVisites] = useState([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
+    const [success, setSuccess] = useState(null);
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedVisite, setSelectedVisite] = useState(null);
     const [dialogOpen, setDialogOpen] = useState(false);
-    const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-    const [visiteToDelete, setVisiteToDelete] = useState(null);
-    const [uploading, setUploading] = useState(false);
+    const [downloadLoading, setDownloadLoading] = useState(false);
 
     useEffect(() => {
         fetchVisitesRealisees();
     }, []);
 
-    // ✅ Récupérer UNIQUEMENT les visites REALISE (avec ou sans PI)
     const fetchVisitesRealisees = async () => {
         setLoading(true);
         setError(null);
@@ -74,12 +72,63 @@ const PieceInterventionList = () => {
         }
     };
 
-    const handleUpload = (planningId) => {
-        navigate(`/upload-pi/${planningId}`);
+    // ✅ CORRECTION PRINCIPALE - Téléchargement avec axios
+    const handleDownload = async (pieceId, clientNom, numVisite) => {
+        if (!pieceId) {
+            setError('ID de pièce invalide');
+            return;
+        }
+
+        setDownloadLoading(true);
+        try {
+            console.log('📥 Téléchargement de la pièce ID:', pieceId);
+
+            const response = await api.get(`/pieces/download/${pieceId}`, {
+                responseType: 'blob'
+            });
+
+            if (!response.data || response.data.size === 0) {
+                throw new Error('Le fichier est vide');
+            }
+
+            // Créer un nom de fichier
+            const filename = `PI_${clientNom || 'visite'}_V${numVisite || ''}.pdf`;
+
+            // Créer un blob et un lien de téléchargement
+            const blob = new Blob([response.data]);
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', filename);
+            document.body.appendChild(link);
+            link.click();
+
+            // Nettoyer
+            setTimeout(() => {
+                document.body.removeChild(link);
+                window.URL.revokeObjectURL(url);
+            }, 100);
+
+            setSuccess('Fichier téléchargé avec succès');
+            console.log('✅ Téléchargement terminé');
+
+        } catch (error) {
+            console.error('❌ Erreur téléchargement:', error);
+            setError('Erreur lors du téléchargement du fichier');
+
+            // ✅ Fallback: ouvrir dans une nouvelle fenêtre
+            try {
+                window.open(`/api/pieces/download/${pieceId}`, '_blank');
+            } catch (fallbackError) {
+                console.error('Fallback échoué:', fallbackError);
+            }
+        } finally {
+            setDownloadLoading(false);
+        }
     };
 
-    const handleDownload = (pieceId) => {
-        window.open(`/api/pieces/download/${pieceId}`, '_blank');
+    const handleUpload = (planningId) => {
+        navigate(`/upload-pi/${planningId}`);
     };
 
     const handleViewDetails = (visite) => {
@@ -117,6 +166,15 @@ const PieceInterventionList = () => {
 
     return (
         <Box sx={{ p: 3 }}>
+            {/* Snackbar pour les notifications */}
+            <Snackbar
+                open={!!success}
+                autoHideDuration={3000}
+                onClose={() => setSuccess(null)}
+                message={success}
+                anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+            />
+
             <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 3, flexWrap: 'wrap', gap: 1 }}>
                 <Typography variant="h4">
                     📎 Pièces d'Intervention
@@ -242,9 +300,18 @@ const PieceInterventionList = () => {
                                                     <IconButton
                                                         size="small"
                                                         color="primary"
-                                                        onClick={() => handleDownload(visite.pieceInterventionId)}
+                                                        onClick={() => handleDownload(
+                                                            visite.pieceInterventionId,
+                                                            visite.clientNom,
+                                                            visite.numVisite
+                                                        )}
+                                                        disabled={downloadLoading}
                                                     >
-                                                        <Download />
+                                                        {downloadLoading ? (
+                                                            <CircularProgress size={20} />
+                                                        ) : (
+                                                            <Download />
+                                                        )}
                                                     </IconButton>
                                                 </Tooltip>
                                             ) : (
@@ -315,11 +382,16 @@ const PieceInterventionList = () => {
                                 <Button
                                     size="small"
                                     startIcon={<Download />}
-                                    onClick={() => handleDownload(selectedVisite.pieceInterventionId)}
+                                    onClick={() => handleDownload(
+                                        selectedVisite.pieceInterventionId,
+                                        selectedVisite.clientNom,
+                                        selectedVisite.numVisite
+                                    )}
                                     variant="contained"
                                     color="success"
+                                    disabled={downloadLoading}
                                 >
-                                    Télécharger la PI
+                                    {downloadLoading ? <CircularProgress size={20} /> : 'Télécharger la PI'}
                                 </Button>
                             ) : (
                                 <Button
