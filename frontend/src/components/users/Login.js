@@ -1,4 +1,4 @@
-// components/users/Login.js - Version corrigée
+// components/users/Login.js - VERSION CORRIGÉE AVEC REDIRECTION PAR RÔLE
 import React, { useState } from 'react';
 import {
     Box,
@@ -40,7 +40,6 @@ const Login = () => {
             console.log('📥 Réponse login:', response.data);
 
             if (response.data) {
-                // ✅ Récupérer le token
                 const token = response.data.token;
                 const userData = response.data.user;
 
@@ -48,13 +47,12 @@ const Login = () => {
                 console.log('👤 Utilisateur:', userData);
                 console.log('🔑 Rôle:', userData?.role);
 
-                // ✅ STOCKER LE TOKEN (IMPORTANT !)
+                // ✅ STOCKER LE TOKEN
                 if (token) {
                     localStorage.setItem('token', token);
                     console.log('✅ Token stocké dans localStorage');
                 } else {
                     console.warn('⚠️ Aucun token reçu');
-                    // Créer un token temporaire pour le test
                     const tempToken = 'temp-token-' + Date.now();
                     localStorage.setItem('token', tempToken);
                     console.log('✅ Token temporaire créé:', tempToken);
@@ -73,8 +71,23 @@ const Login = () => {
                 const storedToken = localStorage.getItem('token');
                 console.log('📦 Vérification - Token stocké:', storedToken ? '✅ Oui' : '❌ Non');
 
-                // Rediriger vers le dashboard
-                navigate('/dashboard');
+                // ✅ REDIRECTION SELON LE RÔLE
+                const role = userData?.role;
+                let redirectPath = '/dashboard';
+
+                if (role === 'ADMIN') {
+                    redirectPath = '/dashboard';
+                } else if (role === 'RESPONSABLE_SOFTWARE') {
+                    redirectPath = '/responsable-upcoming';
+                } else if (role === 'TECHNICIEN_HARDWARE' || role === 'TECHNICEN_HARDWARE') {
+                    redirectPath = '/technicien-upcoming';
+                } else {
+                    redirectPath = '/dashboard';
+                }
+
+                console.log(`🔀 Redirection vers: ${redirectPath} (rôle: ${role})`);
+                navigate(redirectPath);
+
             } else {
                 setError('Erreur de connexion');
             }
@@ -86,6 +99,8 @@ const Login = () => {
                 setError(error.response.data.message);
             } else if (error.response?.status === 401) {
                 setError('Email ou mot de passe incorrect');
+            } else if (error.response?.status === 404) {
+                setError('Serveur non trouvé - Vérifiez que le backend est démarré');
             } else {
                 setError('Erreur de connexion au serveur');
             }
@@ -102,18 +117,31 @@ const Login = () => {
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
+                    bgcolor: '#f5f7fa',
                 }}
             >
                 <Paper
-                    elevation={3}
+                    elevation={0}
                     sx={{
                         p: 4,
                         width: '100%',
-                        borderRadius: 2,
+                        borderRadius: 3,
+                        border: '1px solid #e8ecf1',
+                        boxShadow: '0 4px 20px rgba(0,0,0,0.06)',
                     }}
                 >
                     <Box sx={{ textAlign: 'center', mb: 4 }}>
-                        <Typography variant="h4" component="h1" gutterBottom sx={{ color: '#0044CC' }}>
+                        <Typography
+                            variant="h4"
+                            component="h1"
+                            gutterBottom
+                            sx={{
+                                fontWeight: 700,
+                                background: 'linear-gradient(135deg, #0044CC, #00d2ff)',
+                                WebkitBackgroundClip: 'text',
+                                WebkitTextFillColor: 'transparent',
+                            }}
+                        >
                             RMS
                         </Typography>
                         <Typography variant="subtitle1" color="textSecondary">
@@ -122,7 +150,7 @@ const Login = () => {
                     </Box>
 
                     {error && (
-                        <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError('')}>
+                        <Alert severity="error" sx={{ mb: 3, borderRadius: 2 }} onClose={() => setError('')}>
                             {error}
                         </Alert>
                     )}
@@ -140,6 +168,7 @@ const Login = () => {
                             disabled={loading}
                             InputProps={{
                                 startAdornment: <Email sx={{ mr: 1, color: 'text.secondary' }} />,
+                                sx: { borderRadius: 2 }
                             }}
                         />
                         <TextField
@@ -153,6 +182,7 @@ const Login = () => {
                             disabled={loading}
                             InputProps={{
                                 startAdornment: <Lock sx={{ mr: 1, color: 'text.secondary' }} />,
+                                sx: { borderRadius: 2 }
                             }}
                         />
                         <Button
@@ -160,20 +190,54 @@ const Login = () => {
                             type="submit"
                             variant="contained"
                             size="large"
-                            sx={{ mt: 3, py: 1.5 }}
+                            sx={{
+                                mt: 3,
+                                py: 1.5,
+                                borderRadius: 2,
+                                textTransform: 'none',
+                                fontSize: '1rem',
+                                fontWeight: 600,
+                                background: 'linear-gradient(135deg, #0044CC, #0066FF)',
+                                '&:hover': {
+                                    background: 'linear-gradient(135deg, #0033AA, #0044CC)',
+                                }
+                            }}
                             disabled={loading}
                             startIcon={!loading && <LoginIcon />}
                         >
-                            {loading ? <CircularProgress size={24} /> : 'Se connecter'}
+                            {loading ? <CircularProgress size={24} sx={{ color: 'white' }} /> : 'Se connecter'}
                         </Button>
                     </form>
 
-                    <Box sx={{ mt: 2, textAlign: 'center' }}>
-                        <Typography variant="body2">
+                    <Box sx={{ mt: 3, textAlign: 'center' }}>
+                        <Typography variant="body2" color="textSecondary">
                             Pas encore de compte ?{' '}
-                            <Link component={RouterLink} to="/register" sx={{ fontWeight: 'bold' }}>
+                            <Link
+                                component={RouterLink}
+                                to="/register"
+                                sx={{
+                                    fontWeight: 600,
+                                    color: '#0044CC',
+                                    textDecoration: 'none',
+                                    '&:hover': {
+                                        textDecoration: 'underline',
+                                    }
+                                }}
+                            >
                                 S'inscrire
                             </Link>
+                        </Typography>
+                    </Box>
+
+                    <Box sx={{ mt: 2, textAlign: 'center' }}>
+                        <Typography variant="caption" color="textSecondary">
+                            💡 Comptes de test:
+                            <br />
+                            Admin: hamza@gmail.com
+                            <br />
+                            Responsable: aya@gmail.com
+                            <br />
+                            Technicien: hassan@gmail.com
                         </Typography>
                     </Box>
                 </Paper>

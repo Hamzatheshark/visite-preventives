@@ -145,14 +145,26 @@ public class PlanningController {
         }
     }
 
+    // PlanningController.java
+
     @PostMapping("/relancer/{planningId}")
-    public ResponseEntity<String> relancerVisite(@PathVariable Integer planningId) {
+    public ResponseEntity<String> relancerVisite(
+            @PathVariable Integer planningId,
+            @RequestBody(required = false) Map<String, Object> payload) {
         try {
-            planningService.relancerVisite(planningId);
-            return ResponseEntity.ok("Nouvelle proposition envoyée avec succès");
+            String nouvelleDate = payload != null ? (String) payload.get("nouvelleDate") : null;
+            Boolean confirmerDirectement = payload != null &&
+                    payload.containsKey("confirmerDirectement") &&
+                    (Boolean) payload.get("confirmerDirectement");
+
+            log.info("📤 Relance de la visite ID: {} avec date: {}, confirmation directe: {}",
+                    planningId, nouvelleDate, confirmerDirectement);
+
+            planningService.relancerVisite(planningId, nouvelleDate, confirmerDirectement);
+            return ResponseEntity.ok("✅ Visite relancée avec succès");
         } catch (Exception e) {
             log.error("❌ Erreur relance: {}", e.getMessage(), e);
-            return ResponseEntity.internalServerError().body("Erreur: " + e.getMessage());
+            return ResponseEntity.internalServerError().body("❌ Erreur: " + e.getMessage());
         }
     }
 

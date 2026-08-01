@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
@@ -42,6 +42,9 @@ import Stats from './components/stats/Stats';
 import ImportExport from './components/importexport/ImportExport';
 import Notifications from './components/notifications/NotificationList';
 import SiteList from './components/sites/SiteList';
+import NotificationToast from './components/common/NotificationToast';
+import ProtectedRoute from './components/common/ProtectedRoute'; // ✅ NOUVEAU
+import webSocketService from './services/websocketService';
 
 // ===== THÈME =====
 const theme = createTheme({
@@ -72,6 +75,25 @@ const AppContent = () => {
     const hideNavbarPages = ['/login', '/register', '/'];
     const shouldHideNavbar = hideNavbarPages.includes(location.pathname);
 
+    // ✅ Connexion WebSocket
+    useEffect(() => {
+        const userStr = localStorage.getItem('user');
+        if (userStr) {
+            try {
+                const user = JSON.parse(userStr);
+                if (user?.id) {
+                    console.log('🔗 Connexion WebSocket pour l\'utilisateur:', user.id);
+                    webSocketService.connect(user.id);
+                }
+            } catch (e) {
+                console.error('❌ Erreur parsing user:', e);
+            }
+        }
+        return () => {
+            webSocketService.disconnect();
+        };
+    }, []);
+
     return (
         <>
             {!shouldHideNavbar && <Navbar onMenuClick={() => setSidebarOpen(!sidebarOpen)} />}
@@ -93,67 +115,212 @@ const AppContent = () => {
                         <Route path="/login" element={<Login />} />
                         <Route path="/register" element={<Register />} />
 
-                        {/* ===== ROUTES ADMIN ===== */}
-                        <Route path="/dashboard" element={<Dashboard />} />
-                        <Route path="/clients" element={<ClientList />} />
-                        <Route path="/clients/new" element={<ClientForm />} />
-                        <Route path="/clients/edit/:id" element={<ClientForm />} />
-                        <Route path="/plannings" element={<PlanningList />} />
-                        <Route path="/calendar" element={<PlanningCalendar />} />
-                        <Route path="/history" element={<History />} />
-                        <Route path="/pieces" element={<PieceInterventionList />} />
-                        <Route path="/upload-pi/:planningId" element={<UploadPiece />} />
-                        <Route path="/sites" element={<SiteList />} />
+                        {/* ===== ROUTES ADMIN (Protégées) ===== */}
+                        <Route path="/dashboard" element={
+                            <ProtectedRoute allowedRoles={['ADMIN']}>
+                                <Dashboard />
+                            </ProtectedRoute>
+                        } />
+                        <Route path="/clients" element={
+                            <ProtectedRoute allowedRoles={['ADMIN']}>
+                                <ClientList />
+                            </ProtectedRoute>
+                        } />
+                        <Route path="/clients/new" element={
+                            <ProtectedRoute allowedRoles={['ADMIN']}>
+                                <ClientForm />
+                            </ProtectedRoute>
+                        } />
+                        <Route path="/clients/edit/:id" element={
+                            <ProtectedRoute allowedRoles={['ADMIN']}>
+                                <ClientForm />
+                            </ProtectedRoute>
+                        } />
+                        <Route path="/plannings" element={
+                            <ProtectedRoute allowedRoles={['ADMIN']}>
+                                <PlanningList />
+                            </ProtectedRoute>
+                        } />
+                        <Route path="/calendar" element={
+                            <ProtectedRoute allowedRoles={['ADMIN']}>
+                                <PlanningCalendar />
+                            </ProtectedRoute>
+                        } />
+                        <Route path="/history" element={
+                            <ProtectedRoute allowedRoles={['ADMIN']}>
+                                <History />
+                            </ProtectedRoute>
+                        } />
+                        <Route path="/pieces" element={
+                            <ProtectedRoute allowedRoles={['ADMIN']}>
+                                <PieceInterventionList />
+                            </ProtectedRoute>
+                        } />
+                        <Route path="/upload-pi/:planningId" element={
+                            <ProtectedRoute allowedRoles={['ADMIN']}>
+                                <UploadPiece />
+                            </ProtectedRoute>
+                        } />
+                        <Route path="/sites" element={
+                            <ProtectedRoute allowedRoles={['ADMIN']}>
+                                <SiteList />
+                            </ProtectedRoute>
+                        } />
 
-                        {/* ===== ROUTES UTILISATEURS ===== */}
-                        <Route path="/users" element={<UserList />} />
-                        <Route path="/users/responsables" element={<UserList role="RESPONSABLE_SOFTWARE" />} />
-                        <Route path="/users/technicians" element={<UserList role="TECHNICIEN_HARDWARE" />} />
-                        <Route path="/users/admins" element={<UserList role="ADMIN" />} />
+                        {/* ===== ROUTES UTILISATEURS (Admin uniquement) ===== */}
+                        <Route path="/users" element={
+                            <ProtectedRoute allowedRoles={['ADMIN']}>
+                                <UserList />
+                            </ProtectedRoute>
+                        } />
+                        <Route path="/users/responsables" element={
+                            <ProtectedRoute allowedRoles={['ADMIN']}>
+                                <UserList role="RESPONSABLE_SOFTWARE" />
+                            </ProtectedRoute>
+                        } />
+                        <Route path="/users/technicians" element={
+                            <ProtectedRoute allowedRoles={['ADMIN']}>
+                                <UserList role="TECHNICIEN_HARDWARE" />
+                            </ProtectedRoute>
+                        } />
+                        <Route path="/users/admins" element={
+                            <ProtectedRoute allowedRoles={['ADMIN']}>
+                                <UserList role="ADMIN" />
+                            </ProtectedRoute>
+                        } />
 
-                        {/* ===== ROUTES TECHNICIENS ===== */}
-                        <Route path="/technicians" element={<TechnicianList />} />
-                        <Route path="/assign-technicians" element={<AssignTechnician />} />
+                        {/* ===== ROUTES TECHNICIENS (Admin uniquement) ===== */}
+                        <Route path="/technicians" element={
+                            <ProtectedRoute allowedRoles={['ADMIN']}>
+                                <TechnicianList />
+                            </ProtectedRoute>
+                        } />
+                        <Route path="/assign-technicians" element={
+                            <ProtectedRoute allowedRoles={['ADMIN']}>
+                                <AssignTechnician />
+                            </ProtectedRoute>
+                        } />
 
-                        {/* ===== ROUTES IMPORT/EXPORT ===== */}
-                        <Route path="/import" element={<ImportExport />} />
-                        <Route path="/export" element={<ImportExport />} />
+                        {/* ===== ROUTES IMPORT/EXPORT (Admin uniquement) ===== */}
+                        <Route path="/import" element={
+                            <ProtectedRoute allowedRoles={['ADMIN']}>
+                                <ImportExport />
+                            </ProtectedRoute>
+                        } />
+                        <Route path="/export" element={
+                            <ProtectedRoute allowedRoles={['ADMIN']}>
+                                <ImportExport />
+                            </ProtectedRoute>
+                        } />
 
-                        {/* ===== ROUTES NOTIFICATIONS ===== */}
-                        <Route path="/notifications" element={<Notifications />} />
-                        <Route path="/settings" element={<PagePlaceholder title="Paramètres" />} />
+                        {/* ===== ROUTES NOTIFICATIONS (Tous les rôles) ===== */}
+                        <Route path="/notifications" element={
+                            <ProtectedRoute allowedRoles={['ADMIN', 'RESPONSABLE_SOFTWARE', 'TECHNICIEN_HARDWARE']}>
+                                <Notifications />
+                            </ProtectedRoute>
+                        } />
+                        <Route path="/settings" element={
+                            <ProtectedRoute allowedRoles={['ADMIN']}>
+                                <PagePlaceholder title="Paramètres" />
+                            </ProtectedRoute>
+                        } />
 
                         {/* ===== ROUTES RESPONSABLE ===== */}
-                        <Route path="/responsable-upcoming" element={<ResponsableUpcoming />} />
-                        <Route path="/responsable-pending" element={<ResponsablePending />} />
-                        <Route path="/responsable-current" element={<ResponsableCurrent />} />
-                        <Route path="/responsable-completed" element={<ResponsableCompleted />} />
-                        <Route path="/responsable-history" element={<ResponsableHistory />} />
+                        <Route path="/responsable-upcoming" element={
+                            <ProtectedRoute allowedRoles={['RESPONSABLE_SOFTWARE']}>
+                                <ResponsableUpcoming />
+                            </ProtectedRoute>
+                        } />
+                        <Route path="/responsable-pending" element={
+                            <ProtectedRoute allowedRoles={['RESPONSABLE_SOFTWARE']}>
+                                <ResponsablePending />
+                            </ProtectedRoute>
+                        } />
+                        <Route path="/responsable-current" element={
+                            <ProtectedRoute allowedRoles={['RESPONSABLE_SOFTWARE']}>
+                                <ResponsableCurrent />
+                            </ProtectedRoute>
+                        } />
+                        <Route path="/responsable-completed" element={
+                            <ProtectedRoute allowedRoles={['RESPONSABLE_SOFTWARE']}>
+                                <ResponsableCompleted />
+                            </ProtectedRoute>
+                        } />
+                        <Route path="/responsable-history" element={
+                            <ProtectedRoute allowedRoles={['RESPONSABLE_SOFTWARE']}>
+                                <ResponsableHistory />
+                            </ProtectedRoute>
+                        } />
 
                         {/* ===== ROUTES TECHNICIEN ===== */}
-                        <Route path="/technicien-upcoming" element={<TechnicienUpcoming />} />
-                        <Route path="/technicien-pending" element={<TechnicienPending />} />
-                        <Route path="/technicien-current" element={<TechnicienCurrent />} />
-                        <Route path="/technicien-completed" element={<TechnicienCompleted />} />
-                        <Route path="/technicien-history" element={<TechnicienHistory />} />
+                        <Route path="/technicien-upcoming" element={
+                            <ProtectedRoute allowedRoles={['TECHNICIEN_HARDWARE', 'TECHNICEN_HARDWARE']}>
+                                <TechnicienUpcoming />
+                            </ProtectedRoute>
+                        } />
+                        <Route path="/technicien-pending" element={
+                            <ProtectedRoute allowedRoles={['TECHNICIEN_HARDWARE', 'TECHNICEN_HARDWARE']}>
+                                <TechnicienPending />
+                            </ProtectedRoute>
+                        } />
+                        <Route path="/technicien-current" element={
+                            <ProtectedRoute allowedRoles={['TECHNICIEN_HARDWARE', 'TECHNICEN_HARDWARE']}>
+                                <TechnicienCurrent />
+                            </ProtectedRoute>
+                        } />
+                        <Route path="/technicien-completed" element={
+                            <ProtectedRoute allowedRoles={['TECHNICIEN_HARDWARE', 'TECHNICEN_HARDWARE']}>
+                                <TechnicienCompleted />
+                            </ProtectedRoute>
+                        } />
+                        <Route path="/technicien-history" element={
+                            <ProtectedRoute allowedRoles={['TECHNICIEN_HARDWARE', 'TECHNICEN_HARDWARE']}>
+                                <TechnicienHistory />
+                            </ProtectedRoute>
+                        } />
 
-                        {/* ===== ROUTES EMAILS ===== */}
-                        <Route path="/emails" element={<Emails />} />
-                        <Route path="/emails/send" element={<Emails />} />
-                        <Route path="/emails/relances" element={<Emails />} />
-                        <Route path="/emails/history" element={<Emails />} />
+                        {/* ===== ROUTES EMAILS (Admin uniquement) ===== */}
+                        <Route path="/emails" element={
+                            <ProtectedRoute allowedRoles={['ADMIN']}>
+                                <Emails />
+                            </ProtectedRoute>
+                        } />
+                        <Route path="/emails/send" element={
+                            <ProtectedRoute allowedRoles={['ADMIN']}>
+                                <Emails />
+                            </ProtectedRoute>
+                        } />
+                        <Route path="/emails/relances" element={
+                            <ProtectedRoute allowedRoles={['ADMIN']}>
+                                <Emails />
+                            </ProtectedRoute>
+                        } />
+                        <Route path="/emails/history" element={
+                            <ProtectedRoute allowedRoles={['ADMIN']}>
+                                <Emails />
+                            </ProtectedRoute>
+                        } />
 
-                        {/* ===== ROUTES STATS ===== */}
-                        <Route path="/stats" element={<Stats />} />
+                        {/* ===== ROUTES STATS (Admin uniquement) ===== */}
+                        <Route path="/stats" element={
+                            <ProtectedRoute allowedRoles={['ADMIN']}>
+                                <Stats />
+                            </ProtectedRoute>
+                        } />
 
-                        {/* ===== ROUTE PROFIL ===== */}
-                        <Route path="/profile" element={<Profile />} />
+                        {/* ===== ROUTE PROFIL (Tous les rôles) ===== */}
+                        <Route path="/profile" element={
+                            <ProtectedRoute allowedRoles={['ADMIN', 'RESPONSABLE_SOFTWARE', 'TECHNICIEN_HARDWARE']}>
+                                <Profile />
+                            </ProtectedRoute>
+                        } />
 
                         {/* ===== ROUTE 404 ===== */}
                         <Route path="*" element={<Navigate to="/" />} />
                     </Routes>
                 </Box>
             </Box>
+            <NotificationToast />
         </>
     );
 };

@@ -1,4 +1,4 @@
-// components/planning/PlanningList.js - COMPLET FINAL avec gestion REFUSE
+// components/planning/PlanningList.js - CORRIGÉ
 import React, { useState, useEffect } from 'react';
 import {
     Box,
@@ -26,6 +26,8 @@ import {
     FormControl,
     InputLabel,
     Select,
+    Card,
+    CardContent,
 } from '@mui/material';
 import {
     Refresh,
@@ -39,9 +41,12 @@ import {
     History,
     Download,
     Delete as DeleteIcon,
+    Clear,
+    CalendarToday,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import api from '../../api/axiosConfig';
+import webSocketService from '../../services/websocketService';
 
 const statusColors = {
     EN_ATTENTE: { color: '#ff9800', bg: '#fff3cd', label: 'En attente' },
@@ -53,6 +58,8 @@ const statusColors = {
     ANNULE: { color: '#000000', bg: '#e9ecef', label: 'Annulé' },
 };
 
+const VISIBLE_STATUSES = ['EN_ATTENTE', 'ACCEPTE', 'REFUSE', 'RELANCE', 'CONFIRME'];
+
 const PlanningList = () => {
     const navigate = useNavigate();
     const [plannings, setPlannings] = useState([]);
@@ -63,7 +70,6 @@ const PlanningList = () => {
     const [selectedPlanning, setSelectedPlanning] = useState(null);
     const [dialogOpen, setDialogOpen] = useState(false);
 
-    // States pour l'assignation
     const [assignDialogOpen, setAssignDialogOpen] = useState(false);
     const [selectedForAssign, setSelectedForAssign] = useState(null);
     const [techniciens, setTechniciens] = useState([]);
@@ -72,13 +78,26 @@ const PlanningList = () => {
     const [selectedResponsableId, setSelectedResponsableId] = useState('');
     const [loadingUsers, setLoadingUsers] = useState(false);
 
-    useEffect(() => {
-        fetchPlannings();
-    }, [filter]);
+    // ✅ States pour la relance avec choix de date (UNIQUEMENT POUR REFUSE)
+    const [relanceDialogOpen, setRelanceDialogOpen] = useState(false);
+    const [selectedForRelance, setSelectedForRelance] = useState(null);
+    const [newDate, setNewDate] = useState('');
+    const [dateError, setDateError] = useState('');
+    const [relanceLoading, setRelanceLoading] = useState(false);
 
     useEffect(() => {
+        fetchPlannings();
         fetchTechniciensEtResponsables();
-    }, []);
+        webSocketService.addStatusListener(handleStatusChange);
+        return () => {
+            webSocketService.removeStatusListener(handleStatusChange);
+        };
+    }, [filter]);
+
+    const handleStatusChange = (data) => {
+        console.log('🔄 [WebSocket] Changement de statut reçu:', data);
+        fetchPlannings();
+    };
 
     const fetchPlannings = async () => {
         setLoading(true);
@@ -90,7 +109,8 @@ const PlanningList = () => {
             }
             const response = await api.get(url);
             console.log('📋 Plannings reçus:', response.data);
-            const data = Array.isArray(response.data) ? response.data : [];
+            let data = Array.isArray(response.data) ? response.data : [];
+            data = data.filter(p => p.statut !== 'ANNULE' && p.statut !== 'REALISE');
             setPlannings(data);
         } catch (error) {
             console.error('❌ Erreur:', error);
@@ -103,46 +123,27 @@ const PlanningList = () => {
     const fetchTechniciensEtResponsables = async () => {
         setLoadingUsers(true);
         try {
-            console.log('🔍 Récupération de tous les utilisateurs...');
             const response = await api.get('/utilisateurs');
-            console.log('📋 Données reçues:', response.data);
-
             const allUsers = Array.isArray(response.data) ? response.data : [];
-            console.log(`📋 ${allUsers.length} utilisateur(s) trouvé(s)`);
-
             const techs = allUsers.filter(u =>
                 u.actif === true &&
                 (u.role === 'TECHNICIEN_HARDWARE' || u.role === 'TECHNICEN_HARDWARE')
             );
-
             const resp = allUsers.filter(u =>
                 u.actif === true &&
                 u.role === 'RESPONSABLE_SOFTWARE'
             );
-
-            console.log('✅ Techniciens filtrés:', techs);
-            console.log('✅ Responsables filtrés:', resp);
-
             setTechniciens(techs);
             setResponsables(resp);
-
-            console.log(`📊 ${techs.length} technicien(s), ${resp.length} responsable(s)`);
-
         } catch (error) {
             console.error('❌ Erreur:', error);
-            console.error('❌ Response:', error.response);
-            alert('Erreur lors du chargement des utilisateurs. Vérifiez la console.');
         } finally {
             setLoadingUsers(false);
         }
     };
 
-    // ✅ ADMIN - Accepter une visite
     const handleAccepter = async (planningId) => {
-        if (!window.confirm('Confirmer l\'acceptation de cette visite ?')) {
-            return;
-        }
-
+        if (!window.confirm('Confirmer l\'acceptation de cette visite ?')) return;
         try {
             await api.post(`/plannings/reponse/${planningId}?accepte=true`);
             alert('✅ Visite acceptée avec succès !');
@@ -153,12 +154,8 @@ const PlanningList = () => {
         }
     };
 
-    // ✅ ADMIN - Annuler une visite (suppression définitive)
     const handleAnnuler = async (planningId) => {
-        if (!window.confirm('Confirmer l\'annulation définitive de cette visite ?')) {
-            return;
-        }
-
+        if (!window.confirm('Confirmer l\'annulation définitive de cette visite ?')) return;
         try {
             await api.post(`/plannings/annuler/${planningId}`);
             alert('✅ Visite annulée avec succès !');
@@ -169,12 +166,8 @@ const PlanningList = () => {
         }
     };
 
-    // ✅ ADMIN - Relancer une visite (pour EN_ATTENTE)
     const handleRelance = async (planningId) => {
-        if (!window.confirm('Envoyer une relance pour cette visite ?')) {
-            return;
-        }
-
+        if (!window.confirm('Envoyer une relance pour cette visite ?')) return;
         try {
             await api.post(`/plannings/relance/${planningId}`);
             alert('✅ Relance envoyée avec succès !');
@@ -185,19 +178,61 @@ const PlanningList = () => {
         }
     };
 
-    // ✅ ADMIN - Relancer une visite refusée (nouvelle proposition)
-    const handleRelancerVisite = async (planningId) => {
-        if (!window.confirm('Envoyer une nouvelle proposition pour cette visite refusée ?')) {
+    // ✅ Ouvrir le dialog de choix de date pour REFUSE UNIQUEMENT
+    const handleOpenRelanceDialog = (planning) => {
+        setSelectedForRelance(planning);
+        const tomorrow = new Date();
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        setNewDate(tomorrow.toISOString().split('T')[0]);
+        setDateError('');
+        setRelanceDialogOpen(true);
+    };
+
+    // ✅ Confirmer la date choisie -> devient date confirmée directement
+    const handleConfirmRelance = async () => {
+        if (!newDate) {
+            setDateError('Veuillez sélectionner une date');
             return;
         }
 
+        const selectedDate = new Date(newDate);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        if (selectedDate < today) {
+            setDateError('La date ne peut pas être dans le passé');
+            return;
+        }
+
+        const dayOfWeek = selectedDate.getDay();
+        if (dayOfWeek === 0 || dayOfWeek === 6) {
+            setDateError('La date ne peut pas être un week-end');
+            return;
+        }
+
+        if (selectedDate.getMonth() === 7) {
+            setDateError('La date ne peut pas être en août');
+            return;
+        }
+
+        setRelanceLoading(true);
         try {
-            await api.post(`/plannings/relancer/${planningId}`);
-            alert('✅ Nouvelle proposition envoyée avec succès !');
+            // ✅ On envoie la date choisie qui devient directement date confirmée
+            const response = await api.post(`/plannings/relancer/${selectedForRelance.id}`, {
+                nouvelleDate: newDate,
+                confirmerDirectement: true  // ✅ Flag pour confirmer directement
+            });
+            console.log('✅ Réponse relance:', response.data);
+            alert('✅ Visite confirmée avec la nouvelle date !');
+            setRelanceDialogOpen(false);
             fetchPlannings();
         } catch (error) {
-            console.error('❌ Erreur:', error);
-            alert('❌ Erreur lors de la relance');
+            console.error('❌ Erreur détaillée:', error);
+            console.error('❌ Response:', error.response);
+            const errorMessage = error.response?.data || error.message || 'Erreur lors de la relance';
+            alert('❌ Erreur lors de la relance: ' + errorMessage);
+        } finally {
+            setRelanceLoading(false);
         }
     };
 
@@ -221,9 +256,8 @@ const PlanningList = () => {
             );
             setTechniciens(techs);
             setResponsables(resp);
-            console.log(`✅ ${techs.length} technicien(s) et ${resp.length} responsable(s) chargés`);
         } catch (error) {
-            console.error('❌ Erreur lors du chargement:', error);
+            console.error('❌ Erreur:', error);
         } finally {
             setLoadingUsers(false);
         }
@@ -292,231 +326,173 @@ const PlanningList = () => {
     }
 
     return (
-        <Box sx={{ p: 3 }}>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 3, flexWrap: 'wrap', gap: 1 }}>
-                <Typography variant="h4">📋 Planning des Visites</Typography>
-                <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
-                    <Button
-                        variant="contained"
-                        startIcon={<Refresh />}
-                        onClick={fetchPlannings}
-                    >
-                        Actualiser
-                    </Button>
-                </Box>
+        <Box sx={{ p: 2 }}>
+            {/* En-tête */}
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                <Typography variant="h5" sx={{ fontWeight: 600, color: '#1a1a2e' }}>
+                    📋 Planning des Visites
+                    <Chip label={`${filteredPlannings.length} visite(s)`} size="small" sx={{ ml: 2 }} />
+                </Typography>
+                <Button
+                    variant="contained"
+                    startIcon={<Refresh />}
+                    onClick={fetchPlannings}
+                    size="small"
+                    sx={{
+                        bgcolor: '#0044CC',
+                        '&:hover': { bgcolor: '#0033aa' },
+                        borderRadius: 2,
+                        textTransform: 'none',
+                        px: 3,
+                    }}
+                >
+                    Actualiser
+                </Button>
             </Box>
 
             {error && (
-                <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
+                <Alert severity="error" sx={{ mb: 2, borderRadius: 2 }} onClose={() => setError(null)}>
                     {error}
                 </Alert>
             )}
 
-            <Box sx={{ display: 'flex', gap: 2, mb: 3, flexWrap: 'wrap' }}>
-                <TextField
-                    label="Rechercher..."
-                    variant="outlined"
-                    size="small"
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    sx={{ flexGrow: 1, minWidth: 200 }}
-                    placeholder="Client, site, numéro, statut, technicien, responsable..."
-                />
-                <TextField
-                    select
-                    label="Filtrer par statut"
-                    value={filter}
-                    onChange={(e) => setFilter(e.target.value)}
-                    size="small"
-                    sx={{ minWidth: 150 }}
-                >
-                    <MenuItem value="">Tous</MenuItem>
-                    {Object.entries(statusColors).map(([key, value]) => (
-                        <MenuItem key={key} value={key}>
-                            <Chip
-                                label={value.label}
+            {/* Filtres */}
+            <Card sx={{ mb: 2, borderRadius: 2, boxShadow: '0 1px 8px rgba(0,0,0,0.06)' }}>
+                <CardContent sx={{ p: 1.5 }}>
+                    <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center', flexWrap: 'wrap' }}>
+                        <TextField
+                            label="Rechercher..."
+                            variant="outlined"
+                            size="small"
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            sx={{ flexGrow: 1, minWidth: 180 }}
+                            InputProps={{ sx: { borderRadius: 1.5 } }}
+                            placeholder="Client, site, numéro..."
+                        />
+                        <TextField
+                            select
+                            label="Filtrer par statut"
+                            value={filter}
+                            onChange={(e) => setFilter(e.target.value)}
+                            size="small"
+                            sx={{ minWidth: 160 }}
+                            SelectProps={{ sx: { borderRadius: 1.5 } }}
+                        >
+                            <MenuItem value="">Tous les statuts</MenuItem>
+                            {Object.entries(statusColors)
+                                .filter(([key]) => VISIBLE_STATUSES.includes(key))
+                                .map(([key, value]) => (
+                                    <MenuItem key={key} value={key}>
+                                        <Chip label={value.label} size="small" sx={{ bgcolor: value.bg, color: value.color }} />
+                                    </MenuItem>
+                                ))}
+                        </TextField>
+                        {filter && (
+                            <Button
+                                variant="outlined"
                                 size="small"
-                                sx={{ bgcolor: value.bg, color: value.color }}
-                            />
-                        </MenuItem>
-                    ))}
-                </TextField>
-                <Button variant="outlined" onClick={() => { setFilter(''); setSearchTerm(''); }}>
-                    Réinitialiser
-                </Button>
-            </Box>
+                                startIcon={<Clear />}
+                                onClick={() => setFilter('')}
+                                sx={{ borderRadius: 1.5, textTransform: 'none' }}
+                            >
+                                Effacer
+                            </Button>
+                        )}
+                    </Box>
+                </CardContent>
+            </Card>
 
-            <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
-                {filteredPlannings.length} visite(s) trouvée(s) sur {plannings.length}
-            </Typography>
-
+            {/* Tableau */}
             {filteredPlannings.length === 0 ? (
-                <Paper sx={{ p: 3, textAlign: 'center' }}>
-                    <Typography color="textSecondary">
+                <Paper sx={{ p: 4, textAlign: 'center', borderRadius: 2 }}>
+                    <Typography color="textSecondary" variant="h6">
                         {plannings.length === 0 ? 'Aucune visite trouvée' : 'Aucune visite ne correspond aux filtres'}
                     </Typography>
                 </Paper>
             ) : (
-                <TableContainer component={Paper}>
-                    <Table>
+                <TableContainer component={Paper} sx={{ borderRadius: 2, boxShadow: '0 1px 8px rgba(0,0,0,0.06)' }}>
+                    <Table size="small">
                         <TableHead>
-                            <TableRow sx={{ bgcolor: '#f5f5f5' }}>
-                                <TableCell><strong>N° Visite</strong></TableCell>
-                                <TableCell><strong>Client</strong></TableCell>
-                                <TableCell><strong>Site</strong></TableCell>
-                                <TableCell><strong>Date proposée</strong></TableCell>
-                                <TableCell><strong>Date confirmée</strong></TableCell>
-                                <TableCell><strong>Statut</strong></TableCell>
-                                <TableCell><strong>Technicien</strong></TableCell>
-                                <TableCell><strong>Responsable</strong></TableCell>
-                                <TableCell><strong>Actions</strong></TableCell>
+                            <TableRow sx={{ bgcolor: '#f8f9fa' }}>
+                                <TableCell sx={{ fontWeight: 600, py: 1, px: 1.5, width: '80px' }}>N° Visite</TableCell>
+                                <TableCell sx={{ fontWeight: 600, py: 1, px: 1.5, width: '120px' }}>Client</TableCell>
+                                <TableCell sx={{ fontWeight: 600, py: 1, px: 1.5, width: '140px' }}>Site</TableCell>
+                                <TableCell sx={{ fontWeight: 600, py: 1, px: 1.5, width: '110px' }}>Date proposée</TableCell>
+                                <TableCell sx={{ fontWeight: 600, py: 1, px: 1.5, width: '110px' }}>Date confirmée</TableCell>
+                                <TableCell sx={{ fontWeight: 600, py: 1, px: 1.5, width: '120px' }}>Statut</TableCell>
+                                <TableCell sx={{ fontWeight: 600, py: 1, px: 1.5, width: '130px' }}>Technicien</TableCell>
+                                <TableCell sx={{ fontWeight: 600, py: 1, px: 1.5, width: '130px' }}>Responsable</TableCell>
+                                <TableCell sx={{ fontWeight: 600, py: 1, px: 1.5, width: '240px' }} align="center">Actions</TableCell>
                             </TableRow>
                         </TableHead>
                         <TableBody>
                             {filteredPlannings.map((planning) => (
-                                <TableRow key={planning.id} hover>
-                                    <TableCell>
-                                        <Chip
-                                            label={`V${planning.numVisite || '?'}`}
-                                            size="small"
-                                            variant="outlined"
-                                        />
+                                <TableRow key={planning.id} hover sx={{ '&:last-child td, &:last-child th': { border: 0 } }}>
+                                    <TableCell sx={{ py: 1, px: 1.5 }}>
+                                        <Chip label={`V${planning.numVisite || '?'}`} size="small" variant="outlined" sx={{ borderRadius: 1, height: 24, fontSize: '0.75rem' }} />
                                     </TableCell>
-                                    <TableCell>{planning.clientNom || 'N/A'}</TableCell>
-                                    <TableCell>{planning.siteNom || 'N/A'}</TableCell>
-                                    <TableCell>{formatDate(planning.dateProposee)}</TableCell>
-                                    <TableCell>{formatDate(planning.dateConfirmee)}</TableCell>
-                                    <TableCell>
+                                    <TableCell sx={{ py: 1, px: 1.5, fontSize: '0.875rem' }}>{planning.clientNom || 'N/A'}</TableCell>
+                                    <TableCell sx={{ py: 1, px: 1.5, fontSize: '0.875rem' }}>{planning.siteNom || 'N/A'}</TableCell>
+                                    <TableCell sx={{ py: 1, px: 1.5, fontSize: '0.875rem' }}>{formatDate(planning.dateProposee)}</TableCell>
+                                    <TableCell sx={{ py: 1, px: 1.5, fontSize: '0.875rem' }}>{formatDate(planning.dateConfirmee)}</TableCell>
+                                    <TableCell sx={{ py: 1, px: 1.5 }}>
                                         <Chip
                                             label={statusColors[planning.statut]?.label || planning.statut || 'N/A'}
                                             size="small"
                                             sx={{
                                                 bgcolor: statusColors[planning.statut]?.bg || '#e9ecef',
                                                 color: statusColors[planning.statut]?.color || '#000',
+                                                borderRadius: 1,
+                                                height: 24,
+                                                fontSize: '0.75rem',
                                             }}
                                         />
                                     </TableCell>
-                                    <TableCell>
+                                    <TableCell sx={{ py: 1, px: 1.5 }}>
                                         {planning.technicienNom ?
-                                            planning.technicienNom :
-                                            <Chip label="Non assigné" size="small" variant="outlined" />
+                                            <Chip label={planning.technicienNom} size="small" variant="outlined" sx={{ borderRadius: 1, height: 24, fontSize: '0.75rem' }} /> :
+                                            <Chip label="Non assigné" size="small" variant="outlined" sx={{ borderRadius: 1, height: 24, fontSize: '0.75rem' }} />
                                         }
                                     </TableCell>
-                                    <TableCell>
+                                    <TableCell sx={{ py: 1, px: 1.5 }}>
                                         {planning.responsableNom ?
-                                            planning.responsableNom :
-                                            <Chip label="Non assigné" size="small" variant="outlined" />
+                                            <Chip label={planning.responsableNom} size="small" variant="outlined" sx={{ borderRadius: 1, height: 24, fontSize: '0.75rem' }} /> :
+                                            <Chip label="Non assigné" size="small" variant="outlined" sx={{ borderRadius: 1, height: 24, fontSize: '0.75rem' }} />
                                         }
                                     </TableCell>
-                                    <TableCell>
-                                        <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
+                                    <TableCell align="center" sx={{ py: 1, px: 1.5 }}>
+                                        <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'center', flexWrap: 'wrap' }}>
+                                            {/* Voir détails */}
                                             <Tooltip title="Voir détails">
-                                                <IconButton size="small" onClick={() => handleViewDetails(planning)}>
-                                                    <Visibility />
+                                                <IconButton size="small" onClick={() => handleViewDetails(planning)} sx={{ p: 0.5 }}>
+                                                    <Visibility fontSize="small" />
                                                 </IconButton>
                                             </Tooltip>
 
-                                            {/* ✅ ADMIN - Actions pour les visites en attente */}
+                                            {/* EN_ATTENTE */}
                                             {planning.statut === 'EN_ATTENTE' && (
                                                 <>
-                                                    <Tooltip title="Accepter la visite">
-                                                        <IconButton
-                                                            size="small"
-                                                            sx={{ color: '#4caf50' }}
-                                                            onClick={() => handleAccepter(planning.id)}
-                                                        >
-                                                            <CheckCircle />
+                                                    <Tooltip title="Accepter">
+                                                        <IconButton size="small" sx={{ color: '#4caf50', p: 0.5 }} onClick={() => handleAccepter(planning.id)}>
+                                                            <CheckCircle fontSize="small" />
                                                         </IconButton>
                                                     </Tooltip>
-                                                    <Tooltip title="Annuler définitivement la visite">
-                                                        <IconButton
-                                                            size="small"
-                                                            sx={{ color: '#f44336' }}
-                                                            onClick={() => handleAnnuler(planning.id)}
-                                                        >
-                                                            <DeleteIcon />
-                                                        </IconButton>
-                                                    </Tooltip>
-                                                    <Tooltip title="Envoyer une relance">
-                                                        <IconButton
-                                                            size="small"
-                                                            sx={{ color: '#ff9800' }}
-                                                            onClick={() => handleRelance(planning.id)}
-                                                        >
-                                                            <Email />
+                                                    <Tooltip title="Annuler">
+                                                        <IconButton size="small" sx={{ color: '#f44336', p: 0.5 }} onClick={() => handleAnnuler(planning.id)}>
+                                                            <DeleteIcon fontSize="small" />
                                                         </IconButton>
                                                     </Tooltip>
                                                 </>
                                             )}
 
-                                            {/* ✅ ADMIN - Actions pour les visites refusées */}
-                                            {planning.statut === 'REFUSE' && (
-                                                <>
-                                                    <Tooltip title="Relancer la visite (nouvelle proposition)">
-                                                        <IconButton
-                                                            size="small"
-                                                            sx={{ color: '#ff9800' }}
-                                                            onClick={() => handleRelancerVisite(planning.id)}
-                                                        >
-                                                            <Email />
-                                                        </IconButton>
-                                                    </Tooltip>
-                                                    <Tooltip title="Annuler définitivement la visite">
-                                                        <IconButton
-                                                            size="small"
-                                                            sx={{ color: '#f44336' }}
-                                                            onClick={() => handleAnnuler(planning.id)}
-                                                        >
-                                                            <DeleteIcon />
-                                                        </IconButton>
-                                                    </Tooltip>
-                                                </>
-                                            )}
-
-                                            {/* ✅ ADMIN - Actions pour les visites acceptées */}
+                                            {/* ACCEPTE */}
                                             {planning.statut === 'ACCEPTE' && (
-                                                <Tooltip title="Assigner technicien & responsable">
-                                                    <IconButton
-                                                        size="small"
-                                                        sx={{ color: '#1976d2' }}
-                                                        onClick={async () => {
-                                                            await loadUsers();
-                                                            setSelectedForAssign(planning);
-                                                            setSelectedTechnicienId('');
-                                                            setSelectedResponsableId('');
-                                                            setAssignDialogOpen(true);
-                                                        }}
-                                                    >
-                                                        <PersonAdd />
-                                                    </IconButton>
-                                                </Tooltip>
-                                            )}
-
-                                            {/* ✅ ADMIN - Actions pour les visites relancées */}
-                                            {planning.statut === 'RELANCE' && (
                                                 <>
-                                                    <Tooltip title="Accepter la visite">
+                                                    <Tooltip title="Assigner">
                                                         <IconButton
                                                             size="small"
-                                                            sx={{ color: '#4caf50' }}
-                                                            onClick={() => handleAccepter(planning.id)}
-                                                        >
-                                                            <CheckCircle />
-                                                        </IconButton>
-                                                    </Tooltip>
-                                                    <Tooltip title="Annuler définitivement la visite">
-                                                        <IconButton
-                                                            size="small"
-                                                            sx={{ color: '#f44336' }}
-                                                            onClick={() => handleAnnuler(planning.id)}
-                                                        >
-                                                            <DeleteIcon />
-                                                        </IconButton>
-                                                    </Tooltip>
-                                                    <Tooltip title="Assigner technicien & responsable">
-                                                        <IconButton
-                                                            size="small"
-                                                            sx={{ color: '#1976d2' }}
+                                                            sx={{ color: '#1976d2', p: 0.5 }}
                                                             onClick={async () => {
                                                                 await loadUsers();
                                                                 setSelectedForAssign(planning);
@@ -525,32 +501,96 @@ const PlanningList = () => {
                                                                 setAssignDialogOpen(true);
                                                             }}
                                                         >
-                                                            <PersonAdd />
+                                                            <PersonAdd fontSize="small" />
+                                                        </IconButton>
+                                                    </Tooltip>
+                                                    <Tooltip title="Annuler">
+                                                        <IconButton size="small" sx={{ color: '#f44336', p: 0.5 }} onClick={() => handleAnnuler(planning.id)}>
+                                                            <DeleteIcon fontSize="small" />
                                                         </IconButton>
                                                     </Tooltip>
                                                 </>
                                             )}
 
-                                            {/* ✅ Upload PI pour les visites réalisées */}
+                                            {/* ✅ REFUSE - UNIQUEMENT POUR REFUSE (bouton de choix de date) */}
+                                            {planning.statut === 'REFUSE' && (
+                                                <>
+                                                    <Tooltip title="Choisir une date (confirmation directe)">
+                                                        <IconButton
+                                                            size="small"
+                                                            sx={{ color: '#ff6f00', p: 0.5 }}
+                                                            onClick={() => handleOpenRelanceDialog(planning)}
+                                                        >
+                                                            <CalendarToday fontSize="small" />
+                                                        </IconButton>
+                                                    </Tooltip>
+                                                    <Tooltip title="Annuler">
+                                                        <IconButton size="small" sx={{ color: '#f44336', p: 0.5 }} onClick={() => handleAnnuler(planning.id)}>
+                                                            <DeleteIcon fontSize="small" />
+                                                        </IconButton>
+                                                    </Tooltip>
+                                                </>
+                                            )}
+
+                                            {/* RELANCE */}
+                                            {planning.statut === 'RELANCE' && (
+                                                <>
+                                                    <Tooltip title="Accepter">
+                                                        <IconButton size="small" sx={{ color: '#4caf50', p: 0.5 }} onClick={() => handleAccepter(planning.id)}>
+                                                            <CheckCircle fontSize="small" />
+                                                        </IconButton>
+                                                    </Tooltip>
+                                                    <Tooltip title="Annuler">
+                                                        <IconButton size="small" sx={{ color: '#f44336', p: 0.5 }} onClick={() => handleAnnuler(planning.id)}>
+                                                            <DeleteIcon fontSize="small" />
+                                                        </IconButton>
+                                                    </Tooltip>
+                                                </>
+                                            )}
+
+                                            {/* CONFIRME */}
+                                            {/* ✅ CONFIRME - ASSIGNATION DISPONIBLE AUSSI */}
+                                            {planning.statut === 'CONFIRME' && (
+                                                <>
+                                                    <Tooltip title="Assigner technicien & responsable">
+                                                        <IconButton
+                                                            size="small"
+                                                            sx={{ color: '#1976d2', p: 0.5 }}
+                                                            onClick={async () => {
+                                                                await loadUsers();
+                                                                setSelectedForAssign(planning);
+                                                                setSelectedTechnicienId('');
+                                                                setSelectedResponsableId('');
+                                                                setAssignDialogOpen(true);
+                                                            }}
+                                                        >
+                                                            <PersonAdd fontSize="small" />
+                                                        </IconButton>
+                                                    </Tooltip>
+                                                    <Tooltip title="Annuler">
+                                                        <IconButton
+                                                            size="small"
+                                                            sx={{ color: '#f44336', p: 0.5 }}
+                                                            onClick={() => handleAnnuler(planning.id)}
+                                                        >
+                                                            <DeleteIcon fontSize="small" />
+                                                        </IconButton>
+                                                    </Tooltip>
+                                                </>
+                                            )}
+
+                                            {/* REALISE */}
                                             {planning.statut === 'REALISE' && (
-                                                <Tooltip title={planning.pieceIntervention ? "PI déjà attachée" : "Ajouter une pièce jointe"}>
+                                                <Tooltip title={planning.pieceIntervention ? "PI déjà attachée" : "Ajouter PI"}>
                                                     <IconButton
                                                         size="small"
-                                                        sx={{
-                                                            color: planning.pieceIntervention ? '#4caf50' : '#ff6f00'
-                                                        }}
+                                                        sx={{ color: planning.pieceIntervention ? '#4caf50' : '#ff6f00' }}
                                                         onClick={() => handleUploadPI(planning.id)}
                                                     >
-                                                        {planning.pieceIntervention ? <Download /> : <AttachFile />}
+                                                        {planning.pieceIntervention ? <Download fontSize="small" /> : <AttachFile fontSize="small" />}
                                                     </IconButton>
                                                 </Tooltip>
                                             )}
-
-                                            <Tooltip title="Voir historique">
-                                                <IconButton size="small" sx={{ color: '#6c757d' }}>
-                                                    <History />
-                                                </IconButton>
-                                            </Tooltip>
                                         </Box>
                                     </TableCell>
                                 </TableRow>
@@ -571,11 +611,7 @@ const PlanningList = () => {
                                 <Chip
                                     label={statusColors[selectedPlanning.statut]?.label || selectedPlanning.statut}
                                     size="small"
-                                    sx={{
-                                        ml: 1,
-                                        bgcolor: statusColors[selectedPlanning.statut]?.bg,
-                                        color: statusColors[selectedPlanning.statut]?.color,
-                                    }}
+                                    sx={{ ml: 1, bgcolor: statusColors[selectedPlanning.statut]?.bg, color: statusColors[selectedPlanning.statut]?.color }}
                                 />
                             )}
                         </Typography>
@@ -586,9 +622,7 @@ const PlanningList = () => {
                         <Grid container spacing={2}>
                             <Grid item xs={12} sm={6}>
                                 <Typography variant="subtitle2" color="textSecondary">N° Visite</Typography>
-                                <Typography variant="body1" fontWeight="bold">
-                                    V{selectedPlanning.numVisite || '?'}
-                                </Typography>
+                                <Typography variant="body1" fontWeight="bold">V{selectedPlanning.numVisite || '?'}</Typography>
                             </Grid>
                             <Grid item xs={12} sm={6}>
                                 <Typography variant="subtitle2" color="textSecondary">Client</Typography>
@@ -604,9 +638,7 @@ const PlanningList = () => {
                             </Grid>
                             <Grid item xs={12} sm={6}>
                                 <Typography variant="subtitle2" color="textSecondary">Date proposée</Typography>
-                                <Typography variant="body1" fontWeight="bold">
-                                    {formatDate(selectedPlanning.dateProposee)}
-                                </Typography>
+                                <Typography variant="body1" fontWeight="bold">{formatDate(selectedPlanning.dateProposee)}</Typography>
                             </Grid>
                             <Grid item xs={12} sm={6}>
                                 <Typography variant="subtitle2" color="textSecondary">Date confirmée</Typography>
@@ -641,11 +673,7 @@ const PlanningList = () => {
                             {selectedPlanning.pieceIntervention && (
                                 <Grid item xs={12}>
                                     <Typography variant="subtitle2" color="textSecondary">Pièce jointe</Typography>
-                                    <Button
-                                        size="small"
-                                        startIcon={<Download />}
-                                        onClick={() => window.open(`/api/pieces/download/${selectedPlanning.pieceInterventionId}`, '_blank')}
-                                    >
+                                    <Button size="small" startIcon={<Download />} onClick={() => window.open(`/api/pieces/download/${selectedPlanning.pieceInterventionId}`, '_blank')}>
                                         Télécharger
                                     </Button>
                                 </Grid>
@@ -654,23 +682,12 @@ const PlanningList = () => {
                     )}
                 </DialogContent>
                 <DialogActions>
-                    <Button onClick={() => setDialogOpen(false)} variant="contained">
-                        Fermer
-                    </Button>
+                    <Button onClick={() => setDialogOpen(false)} variant="contained">Fermer</Button>
                 </DialogActions>
             </Dialog>
 
-            {/* Dialog d'assignation technicien + responsable */}
-            <Dialog
-                open={assignDialogOpen}
-                onClose={() => {
-                    setAssignDialogOpen(false);
-                    setSelectedTechnicienId('');
-                    setSelectedResponsableId('');
-                }}
-                maxWidth="sm"
-                fullWidth
-            >
+            {/* Dialog d'assignation */}
+            <Dialog open={assignDialogOpen} onClose={() => { setAssignDialogOpen(false); setSelectedTechnicienId(''); setSelectedResponsableId(''); }} maxWidth="sm" fullWidth>
                 <DialogTitle>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                         <PersonAdd sx={{ color: 'primary.main' }} />
@@ -684,131 +701,110 @@ const PlanningList = () => {
 
                     <FormControl fullWidth sx={{ mt: 1, mb: 2 }}>
                         <InputLabel>Choisir un technicien</InputLabel>
-                        <Select
-                            value={selectedTechnicienId || ''}
-                            onChange={(e) => setSelectedTechnicienId(e.target.value)}
-                            label="Choisir un technicien"
-                            onOpen={async () => {
-                                console.log('🔍 CHARGEMENT DES TECHNICIENS...');
-                                if (techniciens.length === 0) {
-                                    setLoadingUsers(true);
-                                    try {
-                                        const response = await api.get('/utilisateurs');
-                                        const allUsers = Array.isArray(response.data) ? response.data : [];
-                                        const techs = allUsers.filter(u =>
-                                            u.actif === true &&
-                                            (u.role === 'TECHNICIEN_HARDWARE' || u.role === 'TECHNICEN_HARDWARE')
-                                        );
-                                        setTechniciens(techs);
-                                        console.log('✅ Techniciens chargés:', techs);
-                                    } catch (error) {
-                                        console.error('❌ Erreur:', error);
-                                    } finally {
-                                        setLoadingUsers(false);
-                                    }
-                                }
-                            }}
-                        >
+                        <Select value={selectedTechnicienId || ''} onChange={(e) => setSelectedTechnicienId(e.target.value)} label="Choisir un technicien">
                             <MenuItem value="">-- Sélectionner --</MenuItem>
-                            {loadingUsers ? (
-                                <MenuItem disabled>Chargement...</MenuItem>
-                            ) : techniciens.length === 0 ? (
-                                <MenuItem disabled>Aucun technicien disponible</MenuItem>
-                            ) : (
-                                techniciens.map((tech) => (
-                                    <MenuItem key={tech.id} value={tech.id}>
-                                        {tech.prenom} {tech.nom} - {tech.email}
-                                    </MenuItem>
-                                ))
-                            )}
+                            {techniciens.map((tech) => (
+                                <MenuItem key={tech.id} value={tech.id}>{tech.prenom} {tech.nom} - {tech.email}</MenuItem>
+                            ))}
                         </Select>
                     </FormControl>
 
                     <FormControl fullWidth sx={{ mt: 1 }}>
                         <InputLabel>Choisir un responsable</InputLabel>
-                        <Select
-                            value={selectedResponsableId || ''}
-                            onChange={(e) => setSelectedResponsableId(e.target.value)}
-                            label="Choisir un responsable"
-                            onOpen={async () => {
-                                console.log('🔍 CHARGEMENT DES RESPONSABLES...');
-                                if (responsables.length === 0) {
-                                    setLoadingUsers(true);
-                                    try {
-                                        const response = await api.get('/utilisateurs');
-                                        const allUsers = Array.isArray(response.data) ? response.data : [];
-                                        const resp = allUsers.filter(u =>
-                                            u.actif === true &&
-                                            u.role === 'RESPONSABLE_SOFTWARE'
-                                        );
-                                        setResponsables(resp);
-                                        console.log('✅ Responsables chargés:', resp);
-                                    } catch (error) {
-                                        console.error('❌ Erreur:', error);
-                                    } finally {
-                                        setLoadingUsers(false);
-                                    }
-                                }
-                            }}
-                        >
+                        <Select value={selectedResponsableId || ''} onChange={(e) => setSelectedResponsableId(e.target.value)} label="Choisir un responsable">
                             <MenuItem value="">-- Sélectionner --</MenuItem>
-                            {loadingUsers ? (
-                                <MenuItem disabled>Chargement...</MenuItem>
-                            ) : responsables.length === 0 ? (
-                                <MenuItem disabled>Aucun responsable disponible</MenuItem>
-                            ) : (
-                                responsables.map((resp) => (
-                                    <MenuItem key={resp.id} value={resp.id}>
-                                        {resp.prenom} {resp.nom} - {resp.email}
-                                    </MenuItem>
-                                ))
-                            )}
+                            {responsables.map((resp) => (
+                                <MenuItem key={resp.id} value={resp.id}>{resp.prenom} {resp.nom} - {resp.email}</MenuItem>
+                            ))}
                         </Select>
                     </FormControl>
 
-                    {loadingUsers && (
-                        <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2 }}>
-                            <CircularProgress size={24} />
-                            <Typography sx={{ ml: 1 }}>Chargement des utilisateurs...</Typography>
-                        </Box>
-                    )}
-
                     {!loadingUsers && techniciens.length === 0 && responsables.length === 0 && (
                         <Alert severity="warning" sx={{ mt: 2 }}>
-                            <Typography variant="body2">
-                                Aucun technicien ou responsable trouvé.
-                            </Typography>
-                            <Button
-                                size="small"
-                                color="primary"
-                                onClick={async () => {
-                                    await loadUsers();
-                                }}
-                                sx={{ mt: 1 }}
-                            >
-                                Rafraîchir
-                            </Button>
+                            <Typography variant="body2">Aucun technicien ou responsable trouvé.</Typography>
+                            <Button size="small" color="primary" onClick={async () => { await loadUsers(); }} sx={{ mt: 1 }}>Rafraîchir</Button>
                         </Alert>
                     )}
                 </DialogContent>
                 <DialogActions>
-                    <Button
-                        onClick={() => {
-                            setAssignDialogOpen(false);
-                            setSelectedTechnicienId('');
-                            setSelectedResponsableId('');
-                        }}
-                    >
-                        Annuler
-                    </Button>
-                    <Button
-                        onClick={handleAssigner}
-                        variant="contained"
-                        color="primary"
-                        startIcon={<PersonAdd />}
-                        disabled={!selectedTechnicienId || !selectedResponsableId || loadingUsers}
-                    >
-                        Assigner
+                    <Button onClick={() => { setAssignDialogOpen(false); setSelectedTechnicienId(''); setSelectedResponsableId(''); }}>Annuler</Button>
+                    <Button onClick={handleAssigner} variant="contained" color="primary" startIcon={<PersonAdd />} disabled={!selectedTechnicienId || !selectedResponsableId}>Assigner</Button>
+                </DialogActions>
+            </Dialog>
+
+            {/* ✅ Dialog de choix de date - UNIQUEMENT POUR REFUSE */}
+            <Dialog
+                open={relanceDialogOpen}
+                onClose={() => {
+                    if (!relanceLoading) {
+                        setRelanceDialogOpen(false);
+                        setDateError('');
+                    }
+                }}
+                maxWidth="sm"
+                fullWidth
+            >
+                <DialogTitle>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <CalendarToday sx={{ color: 'primary.main' }} />
+                        <Typography variant="h6">Choisir une nouvelle date</Typography>
+                    </Box>
+                </DialogTitle>
+                <DialogContent>
+                    {selectedForRelance && (
+                        <>
+                            <Box sx={{ mt: 1, mb: 2 }}>
+                                <Typography variant="body2" color="textSecondary">
+                                    Visite <strong>V{selectedForRelance.numVisite}</strong> - {selectedForRelance.clientNom} - {selectedForRelance.siteNom}
+                                </Typography>
+                                <Typography variant="body2" color="textSecondary" sx={{ mt: 0.5 }}>
+                                    Ancienne date: <strong style={{ color: '#f44336' }}>{formatDate(selectedForRelance.dateProposee)}</strong>
+                                </Typography>
+                            </Box>
+
+                            {dateError && (
+                                <Alert severity="error" sx={{ mb: 2 }} onClose={() => setDateError('')}>
+                                    {dateError}
+                                </Alert>
+                            )}
+
+                            <TextField
+                                type="date"
+                                label="Nouvelle date"
+                                value={newDate}
+                                onChange={(e) => {
+                                    setNewDate(e.target.value);
+                                    setDateError('');
+                                }}
+                                fullWidth
+                                variant="outlined"
+                                InputLabelProps={{ shrink: true }}
+                                inputProps={{
+                                    min: new Date(Date.now() + 86400000).toISOString().split('T')[0],
+                                }}
+                                sx={{ mt: 1 }}
+                            />
+
+                            <Box sx={{ mt: 2 }}>
+                                <Typography variant="caption" color="textSecondary">
+                                    ⚠️ La date doit être :
+                                </Typography>
+                                <ul style={{ marginTop: 4, paddingLeft: 20, marginBottom: 0 }}>
+                                    <li>Dans le futur</li>
+                                    <li>Pas un week-end (samedi ou dimanche)</li>
+                                    <li>Pas en août (période de vacances)</li>
+                                </ul>
+                                <Typography variant="caption" color="success.main" sx={{ display: 'block', mt: 1 }}>
+                                    ✅ La date choisie deviendra directement la <strong>date confirmée</strong>
+                                </Typography>
+                            </Box>
+                        </>
+                    )}
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => { setRelanceDialogOpen(false); setDateError(''); }} disabled={relanceLoading}>Annuler</Button>
+                    <Button onClick={handleConfirmRelance} variant="contained" color="primary" disabled={relanceLoading} startIcon={relanceLoading ? <CircularProgress size={20} /> : null}>
+                        {relanceLoading ? 'En cours...' : 'Confirmer la date'}
                     </Button>
                 </DialogActions>
             </Dialog>

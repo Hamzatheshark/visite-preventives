@@ -45,6 +45,7 @@ public interface PlanningService {
     void annulerAssignmentTechnicien(Integer planningId);
     void annulerVisite(Integer planningId);
     void relancerVisite(Integer planningId);
+    void relancerVisite(Integer planningId, String nouvelleDate, Boolean confirmerDirectement);
     // Notifications
     void notifierChangementStatut(Integer planningId, String ancienStatut, String nouveauStatut);
     void planifierVisitesParZone();

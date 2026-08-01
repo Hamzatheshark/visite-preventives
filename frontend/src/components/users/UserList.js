@@ -1,3 +1,4 @@
+// components/users/UserList.js - VERSION PROFESSIONNELLE
 import React, { useState, useEffect } from 'react';
 import {
     Box,
@@ -29,6 +30,7 @@ import {
     FormControlLabel,
     InputAdornment,
     Snackbar,
+    Avatar,
 } from '@mui/material';
 import {
     Add,
@@ -43,6 +45,9 @@ import {
     AdminPanelSettings,
     Engineering,
     SupervisorAccount,
+    Email,
+    Phone,
+    Lock,
 } from '@mui/icons-material';
 import api from '../../api/axiosConfig';
 
@@ -116,12 +121,10 @@ const UserList = ({ role: propRole }) => {
                 }
             }
 
-            // Filtrer par rôle si spécifié
             if (propRole) {
                 userData = userData.filter(u => u.role === propRole);
             }
 
-            // Filtrer par onglet
             if (tabValue === 1) {
                 userData = userData.filter(u => u.role === 'RESPONSABLE_SOFTWARE');
             } else if (tabValue === 2) {
@@ -186,7 +189,6 @@ const UserList = ({ role: propRole }) => {
             setError(null);
             const data = { ...formData };
 
-            // Validation
             if (!data.nom || !data.prenom || !data.email) {
                 setError('Nom, prénom et email sont obligatoires');
                 return;
@@ -198,19 +200,15 @@ const UserList = ({ role: propRole }) => {
             }
 
             if (selectedUser) {
-                // ✅ MODIFICATION
                 await api.put(`/utilisateurs/${selectedUser.id}`, data);
                 setSuccess(`✅ Utilisateur ${data.prenom} ${data.nom} modifié avec succès`);
             } else {
-                // ✅ CRÉATION
                 await api.post('/auth/register', data);
                 setSuccess(`✅ Utilisateur ${data.prenom} ${data.nom} créé avec succès`);
             }
 
             handleCloseDialog();
             fetchUsers();
-
-            // ✅ Notification de succès
             setTimeout(() => setSuccess(null), 5000);
 
         } catch (error) {
@@ -224,7 +222,7 @@ const UserList = ({ role: propRole }) => {
     };
 
     const handleDelete = async (id, nom, prenom) => {
-        if (window.confirm(`Êtes-vous sûr de vouloir supprimer ${prenom} ${nom} ? Cette action est irréversible.`)) {
+        if (window.confirm(`Êtes-vous sûr de vouloir supprimer ${prenom} ${nom} ?`)) {
             try {
                 await api.delete(`/utilisateurs/${id}`);
                 setSuccess(`✅ ${prenom} ${nom} supprimé avec succès`);
@@ -244,7 +242,7 @@ const UserList = ({ role: propRole }) => {
                 ...user,
                 actif: newStatus,
             });
-            setSuccess(`${user.prenom} ${user.nom} ${newStatus ? 'activé' : 'désactivé'} avec succès`);
+            setSuccess(`${user.prenom} ${user.nom} ${newStatus ? 'activé' : 'désactivé'}`);
             fetchUsers();
             setTimeout(() => setSuccess(null), 5000);
         } catch (error) {
@@ -266,9 +264,9 @@ const UserList = ({ role: propRole }) => {
     const getRoleLabel = (role) => {
         const labels = {
             'ADMIN': 'Administrateur',
-            'RESPONSABLE_SOFTWARE': 'Responsable Software',
-            'TECHNICIEN_HARDWARE': 'Technicien Hardware',
-            'TECHNICEN_HARDWARE': 'Technicien Hardware',
+            'RESPONSABLE_SOFTWARE': 'Responsable',
+            'TECHNICIEN_HARDWARE': 'Technicien',
+            'TECHNICEN_HARDWARE': 'Technicien',
         };
         return labels[role] || role;
     };
@@ -281,6 +279,11 @@ const UserList = ({ role: propRole }) => {
             'TECHNICEN_HARDWARE': <Engineering fontSize="small" />,
         };
         return icons[role] || <Person fontSize="small" />;
+    };
+
+    const getInitials = (prenom, nom) => {
+        if (!prenom && !nom) return '?';
+        return `${(prenom || '').charAt(0)}${(nom || '').charAt(0)}`.toUpperCase();
     };
 
     const filteredUsers = users.filter(user => {
@@ -303,37 +306,61 @@ const UserList = ({ role: propRole }) => {
         return (
             <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '50vh' }}>
                 <CircularProgress />
-                <Typography sx={{ ml: 2 }}>Chargement des utilisateurs...</Typography>
+                <Typography sx={{ ml: 2, color: 'text.secondary' }}>Chargement...</Typography>
             </Box>
         );
     }
 
     return (
-        <Box sx={{ p: 3 }}>
-            {/* ✅ Notification de succès */}
+        <Box sx={{ p: 3, bgcolor: '#f5f7fa', minHeight: '100vh' }}>
+            {/* Snackbar */}
             <Snackbar
                 open={!!success}
                 autoHideDuration={5000}
                 onClose={() => setSuccess(null)}
                 anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
             >
-                <Alert severity="success" onClose={() => setSuccess(null)}>
+                <Alert severity="success" onClose={() => setSuccess(null)} sx={{ borderRadius: 2 }}>
                     {success}
                 </Alert>
             </Snackbar>
 
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 1 }}>
+            {/* Header */}
+            <Paper
+                elevation={0}
+                sx={{
+                    p: 3,
+                    mb: 3,
+                    borderRadius: 2,
+                    bgcolor: 'white',
+                    border: '1px solid #e8ecf1',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    flexWrap: 'wrap',
+                    gap: 2,
+                }}
+            >
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                    <Typography variant="h4">👥 Gestion des Utilisateurs</Typography>
-                    <Badge badgeContent={users.length} color="primary" sx={{ mr: 1 }}>
-                        <Person />
-                    </Badge>
+                    <Avatar sx={{ bgcolor: '#0044CC', width: 40, height: 40 }}>
+                        <Person sx={{ color: 'white' }} />
+                    </Avatar>
+                    <Box>
+                        <Typography variant="h6" sx={{ fontWeight: 600, color: '#1a1a2e' }}>
+                            Utilisateurs
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                            {users.length} membre(s)
+                        </Typography>
+                    </Box>
                 </Box>
                 <Box sx={{ display: 'flex', gap: 1 }}>
                     <Button
                         variant="outlined"
                         startIcon={<Refresh />}
                         onClick={fetchUsers}
+                        size="small"
+                        sx={{ borderRadius: 2, textTransform: 'none' }}
                     >
                         Actualiser
                     </Button>
@@ -341,73 +368,106 @@ const UserList = ({ role: propRole }) => {
                         variant="contained"
                         startIcon={<Add />}
                         onClick={() => handleOpenDialog()}
+                        size="small"
+                        sx={{ borderRadius: 2, textTransform: 'none' }}
                     >
                         Nouvel Utilisateur
                     </Button>
                 </Box>
-            </Box>
+            </Paper>
 
             {error && (
-                <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
+                <Alert severity="error" sx={{ mb: 2, borderRadius: 2 }} onClose={() => setError(null)}>
                     {error}
                 </Alert>
             )}
 
-            <Paper sx={{ mb: 3 }}>
+            {/* Tabs */}
+            <Paper
+                elevation={0}
+                sx={{
+                    mb: 3,
+                    borderRadius: 2,
+                    bgcolor: 'white',
+                    border: '1px solid #e8ecf1',
+                    overflow: 'hidden',
+                }}
+            >
                 <Tabs
                     value={tabValue}
                     onChange={(e, v) => setTabValue(v)}
-                    sx={{ borderBottom: 1, borderColor: 'divider' }}
-                >
-                    <Tab
-                        label={
-                            <Badge badgeContent={users.length} color="primary">
-                                Tous
-                            </Badge>
+                    sx={{
+                        borderBottom: 1,
+                        borderColor: 'divider',
+                        px: 2,
+                        '& .MuiTab-root': {
+                            textTransform: 'none',
+                            fontWeight: 500,
+                            fontSize: '0.85rem',
+                            minHeight: 44,
+                            minWidth: 'auto',
+                            px: 2,
                         }
-                    />
+                    }}
+                >
+                    <Tab label="Tous" />
                     <Tab
                         label={
-                            <Badge badgeContent={getCountByRole('RESPONSABLE_SOFTWARE')} color="info">
+                            <Badge badgeContent={getCountByRole('RESPONSABLE_SOFTWARE')} color="info" sx={{ '& .MuiBadge-badge': { fontSize: 10 } }}>
                                 Responsables
                             </Badge>
                         }
                     />
                     <Tab
                         label={
-                            <Badge badgeContent={getCountByRole('TECHNICIEN_HARDWARE') + getCountByRole('TECHNICEN_HARDWARE')} color="success">
+                            <Badge badgeContent={getCountByRole('TECHNICIEN_HARDWARE') + getCountByRole('TECHNICEN_HARDWARE')} color="success" sx={{ '& .MuiBadge-badge': { fontSize: 10 } }}>
                                 Techniciens
                             </Badge>
                         }
                     />
                     <Tab
                         label={
-                            <Badge badgeContent={getCountByRole('ADMIN')} color="error">
-                                Administrateurs
+                            <Badge badgeContent={getCountByRole('ADMIN')} color="error" sx={{ '& .MuiBadge-badge': { fontSize: 10 } }}>
+                                Admins
                             </Badge>
                         }
                     />
                 </Tabs>
             </Paper>
 
-            <Paper sx={{ p: 2, mb: 3, display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
+            {/* Search */}
+            <Paper
+                elevation={0}
+                sx={{
+                    p: 1.5,
+                    mb: 3,
+                    borderRadius: 2,
+                    bgcolor: 'white',
+                    border: '1px solid #e8ecf1',
+                    display: 'flex',
+                    gap: 1.5,
+                    alignItems: 'center',
+                    flexWrap: 'wrap',
+                }}
+            >
                 <TextField
                     size="small"
                     placeholder="Rechercher..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    sx={{ flexGrow: 1, minWidth: 200 }}
+                    sx={{ flexGrow: 1, minWidth: 180 }}
                     InputProps={{
                         startAdornment: (
                             <InputAdornment position="start">
-                                <Search />
+                                <Search sx={{ color: 'text.secondary', fontSize: 20 }} />
                             </InputAdornment>
                         ),
                         endAdornment: searchTerm && (
                             <IconButton size="small" onClick={() => setSearchTerm('')}>
-                                <Clear />
+                                <Clear fontSize="small" />
                             </IconButton>
                         ),
+                        sx: { borderRadius: 2, height: 38 }
                     }}
                 />
                 <TextField
@@ -416,71 +476,74 @@ const UserList = ({ role: propRole }) => {
                     label="Statut"
                     value={filterStatus}
                     onChange={(e) => setFilterStatus(e.target.value)}
-                    sx={{ minWidth: 150 }}
+                    sx={{ minWidth: 120 }}
+                    SelectProps={{ sx: { borderRadius: 2, height: 38 } }}
                 >
                     <MenuItem value="all">Tous</MenuItem>
                     <MenuItem value="actif">Actifs</MenuItem>
                     <MenuItem value="inactif">Inactifs</MenuItem>
                 </TextField>
-                <Typography variant="body2" color="textSecondary">
-                    {filteredUsers.length} utilisateur(s)
+                <Typography variant="body2" color="text.secondary" sx={{ ml: 'auto', fontSize: '0.8rem' }}>
+                    {filteredUsers.length} résultat(s)
                 </Typography>
             </Paper>
 
-            <TableContainer component={Paper}>
-                <Table>
+            {/* Table */}
+            <TableContainer component={Paper} sx={{ borderRadius: 2, border: '1px solid #e8ecf1', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
+                <Table size="small">
                     <TableHead>
-                        <TableRow sx={{ bgcolor: '#f5f5f5' }}>
-                            <TableCell><strong>ID</strong></TableCell>
-                            <TableCell><strong>Utilisateur</strong></TableCell>
-                            <TableCell><strong>Contact</strong></TableCell>
-                            <TableCell><strong>Rôle</strong></TableCell>
-                            <TableCell><strong>Statut</strong></TableCell>
-                            <TableCell align="center"><strong>Actions</strong></TableCell>
+                        <TableRow sx={{ bgcolor: '#f8f9fa' }}>
+                            <TableCell sx={{ fontWeight: 600, fontSize: '0.8rem' }}>Utilisateur</TableCell>
+                            <TableCell sx={{ fontWeight: 600, fontSize: '0.8rem' }}>Contact</TableCell>
+                            <TableCell sx={{ fontWeight: 600, fontSize: '0.8rem' }}>Rôle</TableCell>
+                            <TableCell sx={{ fontWeight: 600, fontSize: '0.8rem' }}>Statut</TableCell>
+                            <TableCell align="center" sx={{ fontWeight: 600, fontSize: '0.8rem' }}>Actions</TableCell>
                         </TableRow>
                     </TableHead>
                     <TableBody>
                         {filteredUsers.length === 0 ? (
                             <TableRow>
-                                <TableCell colSpan={6} align="center" sx={{ py: 4 }}>
-                                    <Typography variant="body1" color="textSecondary">
-                                        {searchTerm ? 'Aucun résultat pour votre recherche' : 'Aucun utilisateur trouvé'}
+                                <TableCell colSpan={5} align="center" sx={{ py: 4 }}>
+                                    <Typography color="text.secondary" sx={{ fontSize: '0.9rem' }}>
+                                        {searchTerm ? 'Aucun résultat' : 'Aucun utilisateur'}
                                     </Typography>
-                                    {!searchTerm && (
-                                        <Button
-                                            variant="outlined"
-                                            size="small"
-                                            sx={{ mt: 2 }}
-                                            startIcon={<Add />}
-                                            onClick={() => handleOpenDialog()}
-                                        >
-                                            Créer un utilisateur
-                                        </Button>
-                                    )}
                                 </TableCell>
                             </TableRow>
                         ) : (
                             filteredUsers.map((user) => (
                                 <TableRow key={user.id} hover>
-                                    <TableCell>#{user.id}</TableCell>
                                     <TableCell>
-                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                            <Person sx={{ color: getRoleColor(user.role) }} />
+                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                                            <Avatar
+                                                sx={{
+                                                    width: 32,
+                                                    height: 32,
+                                                    bgcolor: getRoleColor(user.role),
+                                                    fontSize: '0.75rem',
+                                                    fontWeight: 600,
+                                                }}
+                                            >
+                                                {getInitials(user.prenom, user.nom)}
+                                            </Avatar>
                                             <Box>
-                                                <Typography variant="body1" fontWeight="500">
+                                                <Typography variant="body2" sx={{ fontWeight: 500 }}>
                                                     {user.prenom} {user.nom}
                                                 </Typography>
-                                                <Typography variant="caption" color="textSecondary">
-                                                    ID: {user.id}
+                                                <Typography variant="caption" color="text.secondary">
+                                                    ID {user.id}
                                                 </Typography>
                                             </Box>
                                         </Box>
                                     </TableCell>
                                     <TableCell>
-                                        <Typography variant="body2">{user.email}</Typography>
-                                        <Typography variant="caption" color="textSecondary">
-                                            {user.telephone || 'Pas de téléphone'}
+                                        <Typography variant="body2" sx={{ fontSize: '0.85rem' }}>
+                                            {user.email}
                                         </Typography>
+                                        {user.telephone && (
+                                            <Typography variant="caption" color="text.secondary">
+                                                {user.telephone}
+                                            </Typography>
+                                        )}
                                     </TableCell>
                                     <TableCell>
                                         <Chip
@@ -488,9 +551,11 @@ const UserList = ({ role: propRole }) => {
                                             label={getRoleLabel(user.role)}
                                             size="small"
                                             sx={{
-                                                bgcolor: getRoleColor(user.role) + '20',
+                                                bgcolor: getRoleColor(user.role) + '15',
                                                 color: getRoleColor(user.role),
-                                                fontWeight: 'bold',
+                                                fontWeight: 500,
+                                                fontSize: '0.7rem',
+                                                height: 26,
                                             }}
                                         />
                                     </TableCell>
@@ -499,18 +564,14 @@ const UserList = ({ role: propRole }) => {
                                             label={user.actif ? 'Actif' : 'Inactif'}
                                             color={user.actif ? 'success' : 'default'}
                                             size="small"
-                                            icon={user.actif ? <CheckCircle /> : <Cancel />}
+                                            sx={{ fontSize: '0.7rem', height: 26 }}
                                         />
                                     </TableCell>
                                     <TableCell align="center">
                                         <Box sx={{ display: 'flex', justifyContent: 'center', gap: 0.5 }}>
                                             <Tooltip title="Modifier">
-                                                <IconButton
-                                                    size="small"
-                                                    color="primary"
-                                                    onClick={() => handleOpenDialog(user)}
-                                                >
-                                                    <Edit />
+                                                <IconButton size="small" color="primary" onClick={() => handleOpenDialog(user)} sx={{ p: 0.5 }}>
+                                                    <Edit fontSize="small" />
                                                 </IconButton>
                                             </Tooltip>
                                             <Tooltip title={user.actif ? 'Désactiver' : 'Activer'}>
@@ -518,17 +579,14 @@ const UserList = ({ role: propRole }) => {
                                                     size="small"
                                                     color={user.actif ? 'warning' : 'success'}
                                                     onClick={() => handleToggleStatus(user)}
+                                                    sx={{ p: 0.5 }}
                                                 >
-                                                    {user.actif ? <Cancel /> : <CheckCircle />}
+                                                    {user.actif ? <Cancel fontSize="small" /> : <CheckCircle fontSize="small" />}
                                                 </IconButton>
                                             </Tooltip>
                                             <Tooltip title="Supprimer">
-                                                <IconButton
-                                                    size="small"
-                                                    color="error"
-                                                    onClick={() => handleDelete(user.id, user.nom, user.prenom)}
-                                                >
-                                                    <Delete />
+                                                <IconButton size="small" color="error" onClick={() => handleDelete(user.id, user.nom, user.prenom)} sx={{ p: 0.5 }}>
+                                                    <Delete fontSize="small" />
                                                 </IconButton>
                                             </Tooltip>
                                         </Box>
@@ -540,27 +598,34 @@ const UserList = ({ role: propRole }) => {
                 </Table>
             </TableContainer>
 
-            {/* ✅ DIALOG DE CRÉATION/MODIFICATION */}
-            <Dialog open={dialogOpen} onClose={handleCloseDialog} maxWidth="sm" fullWidth>
-                <DialogTitle>
+            {/* Dialog */}
+            <Dialog
+                open={dialogOpen}
+                onClose={handleCloseDialog}
+                maxWidth="sm"
+                fullWidth
+                PaperProps={{ sx: { borderRadius: 2 } }}
+            >
+                <DialogTitle sx={{ pb: 1 }}>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                         {selectedUser ? <Edit color="primary" /> : <Add color="primary" />}
-                        <Typography variant="h6">
-                            {selectedUser ? `Modifier ${selectedUser.prenom} ${selectedUser.nom}` : 'Nouvel Utilisateur'}
+                        <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                            {selectedUser ? `Modifier ${selectedUser.prenom}` : 'Nouvel Utilisateur'}
                         </Typography>
                     </Box>
                 </DialogTitle>
-                <DialogContent>
+                <DialogContent dividers sx={{ pt: 2 }}>
                     {error && (
-                        <Alert severity="error" sx={{ mt: 2, mb: 2 }}>
+                        <Alert severity="error" sx={{ mb: 2, borderRadius: 2 }} onClose={() => setError(null)}>
                             {error}
                         </Alert>
                     )}
-                    <Grid container spacing={2} sx={{ mt: 1 }}>
+                    <Grid container spacing={2}>
                         <Grid item xs={12} sm={6}>
                             <TextField
                                 fullWidth
-                                label="Nom *"
+                                label="Nom"
+                                size="small"
                                 value={formData.nom}
                                 onChange={(e) => setFormData({ ...formData, nom: e.target.value })}
                                 required
@@ -569,7 +634,8 @@ const UserList = ({ role: propRole }) => {
                         <Grid item xs={12} sm={6}>
                             <TextField
                                 fullWidth
-                                label="Prénom *"
+                                label="Prénom"
+                                size="small"
                                 value={formData.prenom}
                                 onChange={(e) => setFormData({ ...formData, prenom: e.target.value })}
                                 required
@@ -578,8 +644,9 @@ const UserList = ({ role: propRole }) => {
                         <Grid item xs={12}>
                             <TextField
                                 fullWidth
-                                label="Email *"
+                                label="Email"
                                 type="email"
+                                size="small"
                                 value={formData.email}
                                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                                 required
@@ -589,6 +656,7 @@ const UserList = ({ role: propRole }) => {
                             <TextField
                                 fullWidth
                                 label="Téléphone"
+                                size="small"
                                 value={formData.telephone}
                                 onChange={(e) => setFormData({ ...formData, telephone: e.target.value })}
                             />
@@ -597,7 +665,8 @@ const UserList = ({ role: propRole }) => {
                             <TextField
                                 fullWidth
                                 select
-                                label="Rôle *"
+                                label="Rôle"
+                                size="small"
                                 value={formData.role}
                                 onChange={(e) => setFormData({ ...formData, role: e.target.value })}
                                 SelectProps={{ native: true }}
@@ -616,33 +685,38 @@ const UserList = ({ role: propRole }) => {
                                         checked={formData.actif}
                                         onChange={(e) => setFormData({ ...formData, actif: e.target.checked })}
                                         color="success"
+                                        size="small"
                                     />
                                 }
-                                label={formData.actif ? '✅ Actif' : '❌ Inactif'}
+                                label={formData.actif ? 'Actif' : 'Inactif'}
                             />
                         </Grid>
                         {!selectedUser && (
                             <Grid item xs={12}>
                                 <TextField
                                     fullWidth
-                                    label="Mot de passe *"
+                                    label="Mot de passe"
                                     type="password"
+                                    size="small"
                                     value={formData.motPasse}
                                     onChange={(e) => setFormData({ ...formData, motPasse: e.target.value })}
                                     required
-                                    helperText="Minimum 6 caractères"
+                                    helperText="Min. 6 caractères"
                                 />
                             </Grid>
                         )}
                     </Grid>
                 </DialogContent>
-                <DialogActions>
-                    <Button onClick={handleCloseDialog}>Annuler</Button>
+                <DialogActions sx={{ p: 2 }}>
+                    <Button onClick={handleCloseDialog} size="small" sx={{ borderRadius: 2, textTransform: 'none' }}>
+                        Annuler
+                    </Button>
                     <Button
                         onClick={handleSubmit}
                         variant="contained"
                         color="primary"
-                        startIcon={selectedUser ? <Edit /> : <Add />}
+                        size="small"
+                        sx={{ borderRadius: 2, textTransform: 'none' }}
                     >
                         {selectedUser ? 'Modifier' : 'Créer'}
                     </Button>

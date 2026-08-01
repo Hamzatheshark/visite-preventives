@@ -1,4 +1,4 @@
-// components/common/Sidebar.js - VERSION SIMPLIFIEE
+// components/common/Sidebar.js - VERSION CORRIGÉE AVEC MENUS POUR TOUS LES RÔLES
 import React, { useState, useEffect } from 'react';
 import {
     Drawer,
@@ -12,7 +12,6 @@ import {
     Typography,
     Chip,
     Collapse,
-    Badge,
 } from '@mui/material';
 import {
     Dashboard,
@@ -39,7 +38,6 @@ import {
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import api from '../../api/axiosConfig';
 
 const drawerWidth = 240;
 
@@ -48,9 +46,7 @@ const Sidebar = ({ open }) => {
     const location = useLocation();
     const { user, logout } = useAuth();
     const [userRole, setUserRole] = useState(null);
-    const [notificationCount, setNotificationCount] = useState(0);
 
-    // États pour les sous-menus
     const [openVisits, setOpenVisits] = useState(true);
 
     useEffect(() => {
@@ -67,20 +63,7 @@ const Sidebar = ({ open }) => {
             }
         }
         setUserRole(role);
-        fetchNotificationCount();
     }, [user]);
-
-    const fetchNotificationCount = async () => {
-        try {
-            const userId = user?.id || JSON.parse(localStorage.getItem('user'))?.id;
-            if (!userId) return;
-
-            const response = await api.get(`/notifications/utilisateur/${userId}/count`);
-            setNotificationCount(response.data?.count || 0);
-        } catch (error) {
-            console.error('❌ Erreur lors du comptage des notifications:', error);
-        }
-    };
 
     const isAdmin = userRole === 'ADMIN';
     const isResponsable = userRole === 'RESPONSABLE_SOFTWARE';
@@ -92,117 +75,87 @@ const Sidebar = ({ open }) => {
     };
 
     // ============================================
-    // ===== MENU ADMIN (complet) =====
+    // ===== MENU ADMIN =====
     // ============================================
     const adminMenu = [
-        { text: 'Dashboard', icon: <Dashboard />, path: '/dashboard', divider: false },
-        { divider: true },
-        { text: 'Clients & Sites', icon: <Business />, path: '/clients', divider: false },
+        { text: 'Dashboard', icon: <Dashboard sx={{ color: '#1976d2' }} />, path: '/dashboard', divider: false },
+        { divider: true, sx: { my: 1 } },
+        { text: 'Clients & Sites', icon: <Business sx={{ color: '#1976d2' }} />, path: '/clients', divider: false },
         {
             text: 'Visites',
-            icon: <EventNote />,
+            icon: <EventNote sx={{ color: '#2e7d32' }} />,
             open: openVisits,
             setOpen: setOpenVisits,
             subItems: [
-                { text: 'Planning', path: '/plannings' },
-                { text: 'Calendrier', path: '/calendar' },
+                { text: 'Planning', path: '/plannings', icon: <ListIcon fontSize="small" /> },
+                { text: 'Calendrier', path: '/calendar', icon: <CalendarToday fontSize="small" /> },
             ]
         },
-        { text: 'Utilisateurs', icon: <People />, path: '/users', divider: false },
-        { text: 'Pièces d\'intervention', icon: <AttachFile />, path: '/pieces', divider: false },
-        { divider: true },
-        { text: 'Historique', icon: <History />, path: '/history', divider: false },
-        {
-            text: 'Notifications',
-            icon: (
-                <Badge badgeContent={notificationCount} color="error">
-                    <Notifications />
-                </Badge>
-            ),
-            path: '/notifications',
-            divider: false
-        },
+        { text: 'Utilisateurs', icon: <People sx={{ color: '#9c27b0' }} />, path: '/users', divider: false },
+        { text: 'Pièces d\'intervention', icon: <AttachFile sx={{ color: '#ed6c02' }} />, path: '/pieces', divider: false },
+        { divider: true, sx: { my: 1 } },
+        { text: 'Historique', icon: <History sx={{ color: '#6c757d' }} />, path: '/history', divider: false },
     ];
 
     // ============================================
-    // ===== MENU RESPONSABLE SOFTWARE (simplifié) =====
+    // ===== MENU RESPONSABLE SOFTWARE =====
     // ============================================
     const responsableMenu = [
         {
             text: '📍 Mes visites',
-            icon: <Assignment />,
+            icon: <Assignment sx={{ color: '#1976d2' }} />,
             open: openVisits,
             setOpen: setOpenVisits,
             subItems: [
                 {
                     text: 'À venir',
                     path: '/responsable-upcoming',
-                    icon: <Schedule fontSize="small" />,
+                    icon: <Schedule fontSize="small" sx={{ color: '#1976d2' }} />,
                 },
                 {
                     text: 'En cours',
                     path: '/responsable-current',
-                    icon: <Work fontSize="small" />,
+                    icon: <Work fontSize="small" sx={{ color: '#ed6c02' }} />,
                 },
                 {
                     text: 'Terminées',
                     path: '/responsable-completed',
-                    icon: <CheckCircle fontSize="small" />,
+                    icon: <CheckCircle fontSize="small" sx={{ color: '#2e7d32' }} />,
                 },
             ]
-        },
-        {
-            text: 'Notifications',
-            icon: (
-                <Badge badgeContent={notificationCount} color="error">
-                    <Notifications />
-                </Badge>
-            ),
-            path: '/notifications',
-            divider: false
         },
     ];
 
     // ============================================
-    // ===== MENU TECHNICIEN HARDWARE (simplifié) =====
+    // ===== MENU TECHNICIEN HARDWARE =====
     // ============================================
     const technicienMenu = [
         {
             text: '🔧 Mes visites',
-            icon: <Construction />,
+            icon: <Construction sx={{ color: '#2e7d32' }} />,
             open: openVisits,
             setOpen: setOpenVisits,
             subItems: [
                 {
                     text: 'À venir',
                     path: '/technicien-upcoming',
-                    icon: <Schedule fontSize="small" />,
+                    icon: <Schedule fontSize="small" sx={{ color: '#1976d2' }} />,
                 },
                 {
                     text: 'En cours',
                     path: '/technicien-current',
-                    icon: <Work fontSize="small" />,
+                    icon: <Work fontSize="small" sx={{ color: '#ed6c02' }} />,
                 },
                 {
                     text: 'Terminées',
                     path: '/technicien-completed',
-                    icon: <CheckCircle fontSize="small" />,
+                    icon: <CheckCircle fontSize="small" sx={{ color: '#2e7d32' }} />,
                 },
             ]
         },
-        {
-            text: 'Notifications',
-            icon: (
-                <Badge badgeContent={notificationCount} color="error">
-                    <Notifications />
-                </Badge>
-            ),
-            path: '/notifications',
-            divider: false
-        },
     ];
 
-    // Sélection du menu selon le rôle
+    // ✅ Sélection du menu selon le rôle
     let menuItems = [];
     let roleLabel = 'Utilisateur';
     let roleColor = '#666';
@@ -224,9 +177,8 @@ const Sidebar = ({ open }) => {
         roleColor = '#2e7d32';
         roleIcon = <Construction sx={{ color: '#2e7d32' }} />;
     } else {
-        menuItems = [
-            { text: 'Dashboard', icon: <Dashboard />, path: '/dashboard', divider: false },
-        ];
+        // ✅ Si rôle inconnu, afficher un message et déconnecter
+        menuItems = [];
         roleLabel = 'Rôle inconnu';
         roleColor = '#666';
         roleIcon = <Person />;
@@ -234,7 +186,7 @@ const Sidebar = ({ open }) => {
 
     const renderMenuItem = (item, index) => {
         if (item.divider) {
-            return <Divider key={index} sx={{ my: 1 }} />;
+            return <Divider key={index} sx={{ my: item.sx?.my || 1 }} />;
         }
 
         if (item.subItems) {
@@ -242,9 +194,26 @@ const Sidebar = ({ open }) => {
             const setIsOpen = item.setOpen || setOpenVisits;
             return (
                 <div key={index}>
-                    <ListItem button onClick={() => setIsOpen(!isOpen)}>
+                    <ListItem
+                        button
+                        onClick={() => setIsOpen(!isOpen)}
+                        sx={{
+                            borderRadius: 2,
+                            mx: 1,
+                            mb: 0.5,
+                            '&:hover': {
+                                bgcolor: 'action.hover',
+                            }
+                        }}
+                    >
                         <ListItemIcon>{item.icon}</ListItemIcon>
-                        <ListItemText primary={item.text} />
+                        <ListItemText
+                            primary={item.text}
+                            primaryTypographyProps={{
+                                fontWeight: 500,
+                                fontSize: '0.9rem',
+                            }}
+                        />
                         {isOpen ? <ExpandLess /> : <ExpandMore />}
                     </ListItem>
                     <Collapse in={isOpen} timeout="auto" unmountOnExit>
@@ -253,14 +222,33 @@ const Sidebar = ({ open }) => {
                                 <ListItem
                                     button
                                     key={idx}
-                                    sx={{ pl: 4 }}
+                                    sx={{
+                                        pl: 4,
+                                        borderRadius: 2,
+                                        mx: 1,
+                                        mb: 0.3,
+                                        '&.Mui-selected': {
+                                            bgcolor: 'primary.light',
+                                            '& .MuiListItemText-primary': {
+                                                fontWeight: 600,
+                                            }
+                                        },
+                                        '&:hover': {
+                                            bgcolor: 'action.hover',
+                                        }
+                                    }}
                                     onClick={() => navigate(sub.path)}
                                     selected={location.pathname === sub.path}
                                 >
                                     <ListItemIcon sx={{ minWidth: 30 }}>
                                         {sub.icon || <ListIcon fontSize="small" />}
                                     </ListItemIcon>
-                                    <ListItemText primary={sub.text} />
+                                    <ListItemText
+                                        primary={sub.text}
+                                        primaryTypographyProps={{
+                                            fontSize: '0.85rem',
+                                        }}
+                                    />
                                 </ListItem>
                             ))}
                         </List>
@@ -276,14 +264,28 @@ const Sidebar = ({ open }) => {
                 onClick={() => navigate(item.path)}
                 selected={location.pathname === item.path}
                 sx={{
+                    borderRadius: 2,
+                    mx: 1,
+                    mb: 0.5,
                     '&.Mui-selected': {
-                        backgroundColor: 'primary.light',
-                        color: 'primary.main',
+                        bgcolor: 'primary.light',
+                        '& .MuiListItemText-primary': {
+                            fontWeight: 600,
+                        }
                     },
+                    '&:hover': {
+                        bgcolor: 'action.hover',
+                    }
                 }}
             >
                 <ListItemIcon>{item.icon}</ListItemIcon>
-                <ListItemText primary={item.text} />
+                <ListItemText
+                    primary={item.text}
+                    primaryTypographyProps={{
+                        fontWeight: 500,
+                        fontSize: '0.9rem',
+                    }}
+                />
             </ListItem>
         );
     };
@@ -300,47 +302,91 @@ const Sidebar = ({ open }) => {
                     boxSizing: 'border-box',
                     mt: '64px',
                     overflowX: 'hidden',
+                    bgcolor: '#f8f9fa',
+                    borderRight: '1px solid #e8ecf1',
                 },
             }}
         >
             <Toolbar />
 
-            <Box sx={{ p: 2, textAlign: 'center' }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 1 }}>
-                    {roleIcon}
-                    <Chip
-                        label={roleLabel}
+            {/* Profile Header */}
+            <Box sx={{
+                p: 2.5,
+                textAlign: 'center',
+                borderBottom: '1px solid #e8ecf1',
+                bgcolor: 'white',
+            }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 1.5 }}>
+                    <Box
                         sx={{
+                            width: 40,
+                            height: 40,
+                            borderRadius: '50%',
                             bgcolor: roleColor + '20',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
                             color: roleColor,
-                            fontWeight: 'bold',
                         }}
-                    />
+                    >
+                        {roleIcon}
+                    </Box>
+                    <Box sx={{ textAlign: 'left' }}>
+                        <Typography variant="body2" sx={{ fontWeight: 600, color: '#1a1a2e' }}>
+                            {user?.prenom} {user?.nom}
+                        </Typography>
+                        <Chip
+                            label={roleLabel}
+                            size="small"
+                            sx={{
+                                height: '18px',
+                                fontSize: '9px',
+                                fontWeight: 600,
+                                bgcolor: roleColor + '20',
+                                color: roleColor,
+                                border: `1px solid ${roleColor}40`,
+                                '& .MuiChip-label': {
+                                    px: 1,
+                                    py: 0,
+                                }
+                            }}
+                        />
+                    </Box>
                 </Box>
-                {user && (
-                    <Typography variant="caption" display="block" sx={{ mt: 1, color: 'text.secondary' }}>
-                        {user.prenom} {user.nom}
-                    </Typography>
-                )}
             </Box>
-            <Divider />
 
-            <Box sx={{ overflow: 'auto', flexGrow: 1 }}>
+            {/* Menu Items */}
+            <Box sx={{ overflow: 'auto', flexGrow: 1, p: 1 }}>
                 <List>
                     {menuItems.map((item, index) => renderMenuItem(item, index))}
                 </List>
             </Box>
 
-            <Divider />
-
-            <Box sx={{ p: 2 }}>
-                <ListItem button onClick={() => navigate('/profile')}>
-                    <ListItemIcon><Person /></ListItemIcon>
-                    <ListItemText primary="Mon profil" />
-                </ListItem>
-                <ListItem button onClick={handleLogout} sx={{ color: 'error.main' }}>
-                    <ListItemIcon><Logout sx={{ color: 'error.main' }} /></ListItemIcon>
-                    <ListItemText primary="Déconnexion" />
+            {/* Footer - Logout */}
+            <Box sx={{ p: 1, borderTop: '1px solid #e8ecf1', bgcolor: 'white' }}>
+                <ListItem
+                    button
+                    onClick={handleLogout}
+                    sx={{
+                        borderRadius: 2,
+                        mx: 0.5,
+                        color: 'error.main',
+                        '&:hover': {
+                            bgcolor: 'error.light',
+                            color: 'error.dark',
+                        }
+                    }}
+                >
+                    <ListItemIcon>
+                        <Logout sx={{ color: 'error.main' }} />
+                    </ListItemIcon>
+                    <ListItemText
+                        primary="Déconnexion"
+                        primaryTypographyProps={{
+                            fontWeight: 500,
+                            fontSize: '0.9rem',
+                        }}
+                    />
                 </ListItem>
             </Box>
         </Drawer>

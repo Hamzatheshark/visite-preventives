@@ -8,9 +8,7 @@ import {
     Grid,
     Card,
     CardContent,
-    CardActions,
     Paper,
-    useTheme,
 } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -19,220 +17,362 @@ import {
     Build,
     Login,
     PersonAdd,
-    Security,
     EventNote,
     Business,
+    TrendingUp,
+    ArrowForward,
 } from '@mui/icons-material';
 
 const Home = () => {
     const navigate = useNavigate();
-    const theme = useTheme();
 
     const features = [
         {
-            icon: <Business sx={{ fontSize: 40, color: '#1976d2' }} />,
+            icon: <Business sx={{ fontSize: 28 }} />,
             title: 'Gestion des Clients',
-            description: 'Gérez vos clients, sites et contrats en un seul endroit.'
+            description: 'Gérez vos clients, sites et contrats en un seul endroit.',
+            color: '#1976d2',
+            bgColor: '#e3f2fd',
         },
         {
-            icon: <EventNote sx={{ fontSize: 40, color: '#2e7d32' }} />,
+            icon: <EventNote sx={{ fontSize: 28 }} />,
             title: 'Planification des Visites',
-            description: 'Planifiez automatiquement les visites de maintenance préventive.'
+            description: 'Planifiez automatiquement les visites de maintenance préventive.',
+            color: '#2e7d32',
+            bgColor: '#e8f5e9',
         },
         {
-            icon: <Security sx={{ fontSize: 40, color: '#d32f2f' }} />,
-            title: 'Sécurisé',
-            description: 'Authentification forte avec gestion des rôles et permissions.'
+            icon: <TrendingUp sx={{ fontSize: 28 }} />,
+            title: 'Suivi & Reporting',
+            description: 'Suivez l\'état des visites et générez des rapports.',
+            color: '#ed6c02',
+            bgColor: '#fff3e0',
         },
     ];
 
     const roles = [
         {
-            icon: <AdminPanelSettings sx={{ fontSize: 30, color: '#d32f2f' }} />,
+            icon: <AdminPanelSettings sx={{ fontSize: 24 }} />,
             title: 'Administrateur RMS',
-            description: 'Gestion complète de la plateforme'
+            description: 'Gestion complète de la plateforme',
+            color: '#d32f2f',
+            bgColor: '#fce4ec',
         },
         {
-            icon: <ManageAccounts sx={{ fontSize: 30, color: '#1976d2' }} />,
+            icon: <ManageAccounts sx={{ fontSize: 24 }} />,
             title: 'Responsable Software',
-            description: 'Planification et gestion des visites'
+            description: 'Planification et gestion des visites',
+            color: '#1976d2',
+            bgColor: '#e3f2fd',
         },
         {
-            icon: <Build sx={{ fontSize: 30, color: '#2e7d32' }} />,
+            icon: <Build sx={{ fontSize: 24 }} />,
             title: 'Technicien Hardware',
-            description: 'Consultation des plannings et interventions'
+            description: 'Consultation des plannings et interventions',
+            color: '#2e7d32',
+            bgColor: '#e8f5e9',
         },
     ];
 
     return (
-        <Box>
+        <Box sx={{ bgcolor: '#f5f7fa', minHeight: '100vh' }}>
             {/* Hero Section */}
             <Box
                 sx={{
-                    bgcolor: 'primary.main',
+                    background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)',
                     color: 'white',
-                    py: 10,
-                    mb: 6,
-                    borderRadius: '0 0 50% 50% / 0 0 10% 10%',
+                    py: 12,
+                    position: 'relative',
+                    overflow: 'hidden',
                 }}
             >
-                <Container maxWidth="lg">
-                    <Typography
-                        variant="h2"
-                        component="h1"
-                        gutterBottom
-                        sx={{ fontWeight: 'bold', textAlign: 'center' }}
-                    >
-                        RMS
-                    </Typography>
-                    <Typography
-                        variant="h5"
-                        gutterBottom
-                        sx={{ textAlign: 'center', opacity: 0.9 }}
-                    >
-                        Plateforme de Gestion des Visites Préventives
-                    </Typography>
-                    <Typography
-                        variant="body1"
-                        sx={{ textAlign: 'center', opacity: 0.8, maxWidth: 600, mx: 'auto', mb: 4 }}
-                    >
-                        Automatisez le cycle complet de planification des visites
-                        de maintenance préventive pour vos clients.
-                    </Typography>
-                    <Box sx={{ display: 'flex', justifyContent: 'center', gap: 2, flexWrap: 'wrap' }}>
-                        <Button
-                            variant="contained"
-                            size="large"
-                            startIcon={<Login />}
-                            onClick={() => navigate('/login')}
+                <Container maxWidth="lg" sx={{ position: 'relative', zIndex: 1 }}>
+                    <Box sx={{ textAlign: 'center' }}>
+                        {/* Logo - Plus large */}
+                        <Box
                             sx={{
-                                bgcolor: 'white',
-                                color: 'primary.main',
-                                '&:hover': { bgcolor: '#f5f5f5' }
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                width: 120,
+                                height: 120,
+                                borderRadius: '50%',
+                                background: 'linear-gradient(135deg, rgba(0, 210, 255, 0.15), rgba(58, 123, 213, 0.15))',
+                                border: '3px solid rgba(0, 210, 255, 0.3)',
+                                mb: 3,
+                                p: 2,
+                                backdropFilter: 'blur(10px)',
+                                boxShadow: '0 0 60px rgba(0, 210, 255, 0.15)',
                             }}
                         >
-                            Se connecter
-                        </Button>
-                        <Button
-                            variant="outlined"
-                            size="large"
-                            startIcon={<PersonAdd />}
-                            onClick={() => navigate('/register')}
+                            <Typography
+                                variant="h3"
+                                sx={{
+                                    fontWeight: 700,
+                                    background: 'linear-gradient(135deg, #00d2ff 0%, #3a7bd5 100%)',
+                                    WebkitBackgroundClip: 'text',
+                                    WebkitTextFillColor: 'transparent',
+                                    fontSize: { xs: '2rem', md: '2.8rem' },
+                                    letterSpacing: '2px',
+                                }}
+                            >
+                                RMS
+                            </Typography>
+                        </Box>
+                        <Typography
+                            variant="h2"
+                            component="h1"
+                            gutterBottom
                             sx={{
+                                fontWeight: 700,
                                 color: 'white',
-                                borderColor: 'white',
-                                '&:hover': { borderColor: '#f5f5f5', bgcolor: 'rgba(255,255,255,0.1)' }
+                                fontSize: { xs: '2rem', md: '3.5rem' },
+                                letterSpacing: '1px',
                             }}
                         >
-                            S'inscrire
-                        </Button>
+                            Systèmes de Pointage
+                        </Typography>
+                        <Typography
+                            variant="h6"
+                            sx={{
+                                color: 'rgba(255,255,255,0.7)',
+                                maxWidth: 650,
+                                mx: 'auto',
+                                mb: 4,
+                                fontWeight: 300,
+                                lineHeight: 1.8,
+                                fontSize: { xs: '1rem', md: '1.1rem' },
+                            }}
+                        >
+                            Automatisez le cycle complet de planification des visites
+                            de maintenance préventive pour vos clients.
+                        </Typography>
+                        <Box sx={{ display: 'flex', justifyContent: 'center', gap: 2, flexWrap: 'wrap' }}>
+                            <Button
+                                variant="contained"
+                                size="large"
+                                startIcon={<Login />}
+                                onClick={() => navigate('/login')}
+                                sx={{
+                                    bgcolor: 'white',
+                                    color: '#0f3460',
+                                    px: 5,
+                                    py: 1.5,
+                                    borderRadius: 2,
+                                    textTransform: 'none',
+                                    fontWeight: 600,
+                                    fontSize: '1rem',
+                                    '&:hover': {
+                                        bgcolor: '#f0f0f0',
+                                        transform: 'translateY(-2px)',
+                                    },
+                                    transition: 'all 0.3s ease',
+                                }}
+                            >
+                                Se connecter
+                            </Button>
+                            <Button
+                                variant="outlined"
+                                size="large"
+                                startIcon={<PersonAdd />}
+                                onClick={() => navigate('/register')}
+                                sx={{
+                                    color: 'white',
+                                    borderColor: 'rgba(255,255,255,0.3)',
+                                    px: 5,
+                                    py: 1.5,
+                                    borderRadius: 2,
+                                    textTransform: 'none',
+                                    fontWeight: 600,
+                                    fontSize: '1rem',
+                                    '&:hover': {
+                                        borderColor: 'white',
+                                        bgcolor: 'rgba(255,255,255,0.05)',
+                                        transform: 'translateY(-2px)',
+                                    },
+                                    transition: 'all 0.3s ease',
+                                }}
+                            >
+                                S'inscrire
+                            </Button>
+                        </Box>
                     </Box>
                 </Container>
             </Box>
 
-            <Container maxWidth="lg">
+            <Container maxWidth="lg" sx={{ py: 6 }}>
                 {/* Features Section */}
-                <Typography
-                    variant="h4"
-                    component="h2"
-                    gutterBottom
-                    sx={{ textAlign: 'center', mb: 4 }}
-                >
-                    Fonctionnalités
-                </Typography>
-                <Grid container spacing={4} sx={{ mb: 6 }}>
-                    {features.map((feature, index) => (
-                        <Grid item xs={12} md={4} key={index}>
-                            <Card
-                                sx={{
-                                    height: '100%',
-                                    display: 'flex',
-                                    flexDirection: 'column',
-                                    alignItems: 'center',
-                                    textAlign: 'center',
-                                    p: 2,
-                                    transition: 'transform 0.3s',
-                                    '&:hover': {
-                                        transform: 'translateY(-8px)',
-                                        boxShadow: 6,
-                                    }
-                                }}
-                            >
-                                <CardContent>
-                                    <Box sx={{ mb: 2 }}>{feature.icon}</Box>
-                                    <Typography variant="h6" component="h3" gutterBottom>
-                                        {feature.title}
-                                    </Typography>
-                                    <Typography variant="body2" color="text.secondary">
-                                        {feature.description}
-                                    </Typography>
-                                </CardContent>
-                            </Card>
-                        </Grid>
-                    ))}
-                </Grid>
+                <Box sx={{ mb: 8 }}>
+                    <Typography
+                        variant="h4"
+                        component="h2"
+                        sx={{
+                            textAlign: 'center',
+                            fontWeight: 600,
+                            color: '#1a1a2e',
+                            mb: 1,
+                        }}
+                    >
+                        Fonctionnalités
+                    </Typography>
+                    <Typography
+                        variant="body1"
+                        color="text.secondary"
+                        sx={{ textAlign: 'center', mb: 4 }}
+                    >
+                        Tout ce dont vous avez besoin pour gérer vos visites préventives
+                    </Typography>
+                    <Grid container spacing={3}>
+                        {features.map((feature, index) => (
+                            <Grid item xs={12} md={4} key={index}>
+                                <Card
+                                    sx={{
+                                        height: '100%',
+                                        borderRadius: 3,
+                                        border: '1px solid #e8ecf1',
+                                        boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+                                        transition: 'all 0.3s ease',
+                                        '&:hover': {
+                                            transform: 'translateY(-6px)',
+                                            boxShadow: '0 12px 40px rgba(0,0,0,0.08)',
+                                            borderColor: feature.color + '40',
+                                        },
+                                    }}
+                                >
+                                    <CardContent sx={{ p: 3 }}>
+                                        <Box
+                                            sx={{
+                                                bgcolor: feature.bgColor,
+                                                color: feature.color,
+                                                width: 48,
+                                                height: 48,
+                                                borderRadius: 2,
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                mb: 2,
+                                            }}
+                                        >
+                                            {feature.icon}
+                                        </Box>
+                                        <Typography variant="h6" sx={{ fontWeight: 600, mb: 1, color: '#1a1a2e' }}>
+                                            {feature.title}
+                                        </Typography>
+                                        <Typography variant="body2" color="text.secondary">
+                                            {feature.description}
+                                        </Typography>
+                                    </CardContent>
+                                </Card>
+                            </Grid>
+                        ))}
+                    </Grid>
+                </Box>
 
                 {/* Roles Section */}
-                <Typography
-                    variant="h4"
-                    component="h2"
-                    gutterBottom
-                    sx={{ textAlign: 'center', mb: 4 }}
-                >
-                    Les 3 Rôles
-                </Typography>
-                <Grid container spacing={3} sx={{ mb: 6 }}>
-                    {roles.map((role, index) => (
-                        <Grid item xs={12} md={4} key={index}>
-                            <Paper
-                                elevation={2}
-                                sx={{
-                                    p: 3,
-                                    textAlign: 'center',
-                                    height: '100%',
-                                    transition: 'transform 0.3s',
-                                    '&:hover': {
-                                        transform: 'translateY(-4px)',
-                                        boxShadow: 4,
-                                    }
-                                }}
-                            >
-                                <Box sx={{ mb: 2 }}>{role.icon}</Box>
-                                <Typography variant="h6" gutterBottom>
-                                    {role.title}
-                                </Typography>
-                                <Typography variant="body2" color="text.secondary">
-                                    {role.description}
-                                </Typography>
-                            </Paper>
-                        </Grid>
-                    ))}
-                </Grid>
+                <Box sx={{ mb: 8 }}>
+                    <Typography
+                        variant="h4"
+                        component="h2"
+                        sx={{
+                            textAlign: 'center',
+                            fontWeight: 600,
+                            color: '#1a1a2e',
+                            mb: 1,
+                        }}
+                    >
+                        Les 3 Rôles
+                    </Typography>
+                    <Typography
+                        variant="body1"
+                        color="text.secondary"
+                        sx={{ textAlign: 'center', mb: 4 }}
+                    >
+                        Une plateforme adaptée à chaque utilisateur
+                    </Typography>
+                    <Grid container spacing={3}>
+                        {roles.map((role, index) => (
+                            <Grid item xs={12} md={4} key={index}>
+                                <Paper
+                                    elevation={0}
+                                    sx={{
+                                        p: 3,
+                                        textAlign: 'center',
+                                        height: '100%',
+                                        borderRadius: 3,
+                                        border: '1px solid #e8ecf1',
+                                        transition: 'all 0.3s ease',
+                                        '&:hover': {
+                                            transform: 'translateY(-4px)',
+                                            boxShadow: '0 8px 30px rgba(0,0,0,0.08)',
+                                        },
+                                    }}
+                                >
+                                    <Box
+                                        sx={{
+                                            bgcolor: role.bgColor,
+                                            color: role.color,
+                                            width: 56,
+                                            height: 56,
+                                            borderRadius: '50%',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            mx: 'auto',
+                                            mb: 2,
+                                        }}
+                                    >
+                                        {role.icon}
+                                    </Box>
+                                    <Typography variant="h6" sx={{ fontWeight: 600, color: '#1a1a2e' }}>
+                                        {role.title}
+                                    </Typography>
+                                    <Typography variant="body2" color="text.secondary">
+                                        {role.description}
+                                    </Typography>
+                                </Paper>
+                            </Grid>
+                        ))}
+                    </Grid>
+                </Box>
 
                 {/* CTA Section */}
                 <Paper
-                    elevation={3}
+                    elevation={0}
                     sx={{
                         p: 4,
                         textAlign: 'center',
-                        bgcolor: '#f5f5f5',
                         borderRadius: 3,
-                        mb: 4,
+                        background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)',
+                        color: 'white',
                     }}
                 >
-                    <Typography variant="h5" gutterBottom>
+                    <Typography variant="h5" sx={{ fontWeight: 600, mb: 1 }}>
                         Prêt à commencer ?
                     </Typography>
-                    <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+                    <Typography variant="body1" sx={{ opacity: 0.8, mb: 3 }}>
                         Créez votre compte dès maintenant et gérez vos visites préventives.
                     </Typography>
                     <Button
                         variant="contained"
                         size="large"
-                        startIcon={<PersonAdd />}
+                        endIcon={<ArrowForward />}
                         onClick={() => navigate('/register')}
+                        sx={{
+                            bgcolor: 'white',
+                            color: '#0f3460',
+                            px: 5,
+                            py: 1.5,
+                            borderRadius: 2,
+                            textTransform: 'none',
+                            fontWeight: 600,
+                            '&:hover': {
+                                bgcolor: '#f0f0f0',
+                                transform: 'translateY(-2px)',
+                            },
+                            transition: 'all 0.3s ease',
+                        }}
                     >
-                        Créer un compte
+                        Commencer maintenant
                     </Button>
                 </Paper>
             </Container>
@@ -243,16 +383,15 @@ const Home = () => {
                 sx={{
                     py: 3,
                     textAlign: 'center',
-                    bgcolor: 'grey.100',
-                    mt: 4,
+                    bgcolor: 'white',
+                    borderTop: '1px solid #e8ecf1',
                 }}
             >
-                <Typography variant="body2" color="text.secondary">
-                    © {new Date().getFullYear()} RMS - Tous droits réservés
-                </Typography>
-                <Typography variant="caption" color="text.secondary">
-                    Document confidentiel - Version 1.1
-                </Typography>
+                <Container maxWidth="lg">
+                    <Typography variant="body2" color="text.secondary">
+                        © {new Date().getFullYear()} RMS - Systèmes de Pointage. Tous droits réservés.
+                    </Typography>
+                </Container>
             </Box>
         </Box>
     );

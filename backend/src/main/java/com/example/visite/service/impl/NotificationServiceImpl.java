@@ -1,4 +1,4 @@
-// service/impl/NotificationServiceImpl.java
+// service/impl/NotificationServiceImpl.java - VERSION COMPLETE AVEC WEBSOCKET
 package com.example.visite.service.impl;
 
 import com.example.visite.model.Notification;
@@ -9,6 +9,7 @@ import com.example.visite.repository.NotificationRepository;
 import com.example.visite.repository.PlanningRepository;
 import com.example.visite.repository.UtilisateurRepository;
 import com.example.visite.service.NotificationService;
+import com.example.visite.service.WebSocketNotificationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -26,6 +27,7 @@ public class NotificationServiceImpl implements NotificationService {
     private final NotificationRepository notificationRepository;
     private final PlanningRepository planningRepository;
     private final UtilisateurRepository utilisateurRepository;
+    private final WebSocketNotificationService webSocketService; // ✅ AJOUTER
 
     @Override
     public Notification createNotification(Notification notification) {
@@ -77,6 +79,8 @@ public class NotificationServiceImpl implements NotificationService {
             return;
         }
 
+        List<Notification> savedNotifications = new ArrayList<>();
+
         for (Utilisateur destinataire : destinataires) {
             Notification notif = new Notification();
             notif.setTitre(notification.getTitre());
@@ -87,10 +91,14 @@ public class NotificationServiceImpl implements NotificationService {
             notif.setLien(notification.getLien());
             notif.setDateCreation(LocalDateTime.now());
             notif.setLu(false);
-            notificationRepository.save(notif);
+            Notification saved = notificationRepository.save(notif);
+            savedNotifications.add(saved);
+
+            // ✅ ENVOYER EN TEMPS RÉEL VIA WEBSOCKET
+            webSocketService.sendNotificationToUser(destinataire.getId(), saved);
         }
 
-        log.info("📧 Notification envoyée à {} destinataire(s)", destinataires.size());
+        log.info("📧 Notification envoyée à {} destinataire(s) + WebSocket", destinataires.size());
     }
 
     @Override
@@ -110,7 +118,11 @@ public class NotificationServiceImpl implements NotificationService {
                 notif.setLien("/responsable-current");
                 notif.setDateCreation(LocalDateTime.now());
                 notif.setLu(false);
-                notificationRepository.save(notif);
+                Notification saved = notificationRepository.save(notif);
+
+                // ✅ WebSocket
+                webSocketService.sendNotificationToUser(responsable.getId(), saved);
+
                 log.info("📧 Notification envoyée au responsable {} {}", responsable.getPrenom(), responsable.getNom());
             }
         } catch (Exception e) {
@@ -135,7 +147,11 @@ public class NotificationServiceImpl implements NotificationService {
                 notif.setLien("/technicien-current");
                 notif.setDateCreation(LocalDateTime.now());
                 notif.setLu(false);
-                notificationRepository.save(notif);
+                Notification saved = notificationRepository.save(notif);
+
+                // ✅ WebSocket
+                webSocketService.sendNotificationToUser(technicien.getId(), saved);
+
                 log.info("📧 Notification envoyée au technicien {} {}", technicien.getPrenom(), technicien.getNom());
             }
         } catch (Exception e) {
@@ -157,7 +173,10 @@ public class NotificationServiceImpl implements NotificationService {
                 notif.setLien("/dashboard");
                 notif.setDateCreation(LocalDateTime.now());
                 notif.setLu(false);
-                notificationRepository.save(notif);
+                Notification saved = notificationRepository.save(notif);
+
+                // ✅ WebSocket
+                webSocketService.sendNotificationToUser(admin.getId(), saved);
             }
             log.info("📧 Notification envoyée à {} admin(s)", admins.size());
         } catch (Exception e) {
@@ -178,6 +197,9 @@ public class NotificationServiceImpl implements NotificationService {
                     ancienStatut,
                     nouveauStatut
             );
+
+            // ✅ Notifier via WebSocket (changement de statut global)
+            webSocketService.sendStatusChange(planningId, ancienStatut, nouveauStatut);
 
             // Notifier le responsable
             if (planning.getResponsable() != null) {

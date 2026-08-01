@@ -820,6 +820,78 @@ public class PlanningServiceImpl implements PlanningService {
     }
 
 
+    // Dans PlanningServiceImpl.java - AJOUTER cette méthode
+
+
+    // PlanningServiceImpl.java
+
+    @Override
+    @Transactional
+    public void relancerVisite(Integer planningId, String nouvelleDateStr, Boolean confirmerDirectement) {
+        log.info("🔄 Relance de la visite ID: {} avec date: {}, confirmation directe: {}",
+                planningId, nouvelleDateStr, confirmerDirectement);
+
+        try {
+            Planning planning = getPlanningById(planningId);
+
+            if (planning.getStatut() != StatutVisite.REFUSE) {
+                throw new RuntimeException("Seules les visites refusées peuvent être relancées");
+            }
+
+            LocalDate nouvelleDate;
+            if (nouvelleDateStr != null && !nouvelleDateStr.isEmpty()) {
+                nouvelleDate = LocalDate.parse(nouvelleDateStr);
+            } else {
+                nouvelleDate = LocalDate.now().plusDays(1);
+            }
+
+            // ✅ Vérifications
+            if (nouvelleDate.isBefore(LocalDate.now())) {
+                throw new RuntimeException("La date ne peut pas être dans le passé");
+            }
+
+            if (!holidayService.isValidDateForVisit(nouvelleDate)) {
+                throw new RuntimeException("La date n'est pas valide (week-end, férié ou août)");
+            }
+
+            // ✅ Si confirmation directe, mettre à jour la date confirmée
+            if (confirmerDirectement != null && confirmerDirectement) {
+                planning.setDateConfirmee(nouvelleDate);
+                planning.setDateVisite(nouvelleDate);
+                planning.setStatut(StatutVisite.CONFIRME);
+                log.info("✅ Confirmation directe : date confirmée = {}", nouvelleDate);
+            } else {
+                // ❌ Sinon, juste une nouvelle proposition
+                planning.setDateProposee(nouvelleDate);
+                planning.setDateVisite(nouvelleDate);
+                planning.setStatut(StatutVisite.EN_ATTENTE);
+                log.info("✅ Nouvelle proposition : date proposée = {}", nouvelleDate);
+            }
+
+            planning.setNbRelances(0);
+            planning.setDateEnvoi(LocalDateTime.now());
+            planning.setDateReponse(null);
+            planning.setDateRelance(null);
+            planningRepository.save(planning);
+
+            // ✅ Envoyer l'email seulement si ce n'est pas une confirmation directe
+            if (confirmerDirectement == null || !confirmerDirectement) {
+                envoyerProposition(planningId);
+                log.info("📧 Email de proposition envoyé");
+            } else {
+                log.info("📧 Aucun email envoyé (confirmation directe)");
+                // Optionnel : envoyer un email de confirmation
+                // emailService.sendConfirmationEmail(planning);
+            }
+
+            log.info("✅ Visite V{} mise à jour avec la date: {}", planning.getNumVisite(), nouvelleDate);
+
+        } catch (Exception e) {
+            log.error("❌ Erreur lors de la relance: {}", e.getMessage(), e);
+            throw new RuntimeException("Erreur lors de la relance: " + e.getMessage(), e);
+        }
+    }
+
 
     @Override
     @Transactional
@@ -992,6 +1064,8 @@ public class PlanningServiceImpl implements PlanningService {
             throw new RuntimeException("Erreur lors de l'annulation", e);
         }
     }
+
+
 
     @Override
     @Transactional

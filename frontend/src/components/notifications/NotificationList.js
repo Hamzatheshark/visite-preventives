@@ -1,4 +1,3 @@
-// components/notifications/NotificationList.js
 import React, { useState, useEffect } from 'react';
 import {
     Box,
@@ -16,6 +15,7 @@ import {
     CircularProgress,
     Alert,
     Divider,
+    Snackbar,
 } from '@mui/material';
 import {
     Notifications as NotificationsIcon,
@@ -32,16 +32,60 @@ import {
 } from '@mui/icons-material';
 import { useAuth } from '../../context/AuthContext';
 import api from '../../api/axiosConfig';
+import webSocketService from '../../services/websocketService';
 
 const NotificationList = () => {
     const { user } = useAuth();
     const [notifications, setNotifications] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
+    const [unreadCount, setUnreadCount] = useState(0);
+    const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
 
     useEffect(() => {
         fetchNotifications();
+
+        // ✅ Écouter les notifications WebSocket
+        webSocketService.addListener(handleWebSocketNotification);
+
+        return () => {
+            webSocketService.removeListener(handleWebSocketNotification);
+        };
     }, []);
+
+    const handleWebSocketNotification = (data) => {
+        // Ignorer les événements de connexion
+        if (data.type === 'CONNECTED' || data.type === 'DISCONNECTED' || data.type === 'ERROR') {
+            return;
+        }
+
+        // ✅ Nouvelle notification reçue
+        if (data.id && data.titre) {
+            console.log('🔔 Nouvelle notification en temps réel:', data);
+            setNotifications(prev => [data, ...prev]);
+            setUnreadCount(prev => prev + 1);
+
+            // ✅ Mettre à jour le badge dans le Sidebar
+            updateSidebarBadge(unreadCount + 1);
+
+            // ✅ Afficher un toast
+            setSnackbar({
+                open: true,
+                message: data.titre,
+                severity: 'info'
+            });
+        }
+    };
+
+    // ✅ Fonction pour mettre à jour le badge du Sidebar
+    const updateSidebarBadge = (count) => {
+        // Stocker dans localStorage pour que Sidebar le récupère
+        localStorage.setItem('notificationCount', String(count));
+        // Envoyer un événement personnalisé
+        window.dispatchEvent(new CustomEvent('notificationCountUpdate', {
+            detail: { count: count }
+        }));
+    };
 
     const fetchNotifications = async () => {
         setLoading(true);
@@ -58,7 +102,13 @@ const NotificationList = () => {
             const response = await api.get(`/notifications/utilisateur/${userId}`);
             console.log('📋 Notifications reçues:', response.data);
 
-            setNotifications(Array.isArray(response.data) ? response.data : []);
+            const data = Array.isArray(response.data) ? response.data : [];
+            setNotifications(data);
+            const unread = data.filter(n => !n.lu).length;
+            setUnreadCount(unread);
+
+            // ✅ Mettre à jour le badge du Sidebar
+            updateSidebarBadge(unread);
         } catch (error) {
             console.error('❌ Erreur:', error);
             if (error.response?.status === 404) {
@@ -74,9 +124,22 @@ const NotificationList = () => {
     const handleMarkAsRead = async (id) => {
         try {
             await api.put(`/notifications/${id}/read`);
-            fetchNotifications();
+            const updated = notifications.map(n =>
+                n.id === id ? { ...n, lu: true } : n
+            );
+            setNotifications(updated);
+            const newUnread = updated.filter(n => !n.lu).length;
+            setUnreadCount(newUnread);
+
+            // ✅ Mettre à jour le badge du Sidebar
+            updateSidebarBadge(newUnread);
         } catch (error) {
             console.error('❌ Erreur:', error);
+            setSnackbar({
+                open: true,
+                message: 'Erreur lors du marquage',
+                severity: 'error'
+            });
         }
     };
 
@@ -84,9 +147,25 @@ const NotificationList = () => {
         try {
             const userId = user?.id || JSON.parse(localStorage.getItem('user'))?.id;
             await api.put(`/notifications/utilisateur/${userId}/read-all`);
-            fetchNotifications();
+            const updated = notifications.map(n => ({ ...n, lu: true }));
+            setNotifications(updated);
+            setUnreadCount(0);
+
+            // ✅ Mettre à jour le badge du Sidebar
+            updateSidebarBadge(0);
+
+            setSnackbar({
+                open: true,
+                message: '✅ Toutes les notifications ont été marquées comme lues',
+                severity: 'success'
+            });
         } catch (error) {
             console.error('❌ Erreur:', error);
+            setSnackbar({
+                open: true,
+                message: 'Erreur lors du marquage',
+                severity: 'error'
+            });
         }
     };
 
@@ -152,7 +231,9 @@ const NotificationList = () => {
         });
     };
 
-    const unreadCount = notifications.filter(n => !n.lu).length;
+    const handleCloseSnackbar = () => {
+        setSnackbar({ ...snackbar, open: false });
+    };
 
     if (loading) {
         return (
@@ -190,6 +271,11 @@ const NotificationList = () => {
                             size="small"
                         />
                     )}
+                    <Chip
+                        label={`${notifications.length} total`}
+                        variant="outlined"
+                        size="small"
+                    />
                 </Box>
                 <Box sx={{ display: 'flex', gap: 1 }}>
                     <Tooltip title="Marquer toutes comme lues">
@@ -228,7 +314,7 @@ const NotificationList = () => {
                             <React.Fragment key={notif.id}>
                                 <ListItem
                                     sx={{
-                                        bgcolor: notif.lu ? 'transparent' : 'action.hover',
+                                        bgcolor: notif.lu ? 'transparent' : '#f0f7ff', // ✅ Bleu clair pour non lues
                                         '&:hover': { bgcolor: 'action.hover' },
                                         flexDirection: 'column',
                                         alignItems: 'stretch',
@@ -238,7 +324,7 @@ const NotificationList = () => {
                                     <Box sx={{ display: 'flex', alignItems: 'flex-start', width: '100%' }}>
                                         <ListItemIcon sx={{ mt: 0.5 }}>
                                             <Badge
-                                                color="primary"
+                                                color="error"
                                                 variant="dot"
                                                 invisible={notif.lu}
                                             >
@@ -261,7 +347,7 @@ const NotificationList = () => {
                                                         <Chip
                                                             label="Nouveau"
                                                             size="small"
-                                                            color="primary"
+                                                            color="error"
                                                             sx={{ fontWeight: 'bold' }}
                                                         />
                                                     )}
@@ -314,6 +400,18 @@ const NotificationList = () => {
                     </List>
                 </Paper>
             )}
+
+            {/* ✅ Snackbar pour les notifications */}
+            <Snackbar
+                open={snackbar.open}
+                autoHideDuration={4000}
+                onClose={handleCloseSnackbar}
+                anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
+            >
+                <Alert onClose={handleCloseSnackbar} severity={snackbar.severity} sx={{ width: '100%' }}>
+                    {snackbar.message}
+                </Alert>
+            </Snackbar>
         </Box>
     );
 };
