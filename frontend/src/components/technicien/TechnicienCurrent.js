@@ -6,7 +6,7 @@ import {
     Alert, IconButton, Tooltip, Button, Dialog, DialogTitle,
     DialogContent, DialogActions, TextField, Snackbar
 } from '@mui/material';
-import { CheckCircle, PersonOff, Refresh } from '@mui/icons-material';
+import { CheckCircle, Refresh } from '@mui/icons-material';
 import { useAuth } from '../../context/AuthContext';
 import api from '../../api/axiosConfig';
 
@@ -62,18 +62,6 @@ const TechnicienCurrent = () => {
         }
     };
 
-    const handleAnnulerAssignment = async (visitId) => {
-        if (!window.confirm('Confirmer l\'annulation de votre assignement pour cette visite ?')) return;
-
-        try {
-            await api.post(`/plannings/${visitId}/annuler-assignment-technicien`);
-            setSnackbar({ open: true, message: '✅ Assignement annulé avec succès !', severity: 'success' });
-            fetchVisits();
-        } catch (error) {
-            setSnackbar({ open: true, message: '❌ Erreur lors de l\'annulation', severity: 'error' });
-        }
-    };
-
     const handleCloseSnackbar = () => {
         setSnackbar({ ...snackbar, open: false });
     };
@@ -126,26 +114,15 @@ const TechnicienCurrent = () => {
                                         />
                                     </TableCell>
                                     <TableCell>
-                                        <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
-                                            <Tooltip title="Marquer comme terminée">
-                                                <IconButton
-                                                    size="small"
-                                                    color="success"
-                                                    onClick={() => handleTerminer(v.id)}
-                                                >
-                                                    <CheckCircle />
-                                                </IconButton>
-                                            </Tooltip>
-                                            <Tooltip title="Annuler mon assignement">
-                                                <IconButton
-                                                    size="small"
-                                                    color="error"
-                                                    onClick={() => handleAnnulerAssignment(v.id)}
-                                                >
-                                                    <PersonOff />
-                                                </IconButton>
-                                            </Tooltip>
-                                        </Box>
+                                        <Tooltip title="Marquer comme terminée">
+                                            <IconButton
+                                                size="small"
+                                                color="success"
+                                                onClick={() => handleTerminer(v.id)}
+                                            >
+                                                <CheckCircle />
+                                            </IconButton>
+                                        </Tooltip>
                                     </TableCell>
                                 </TableRow>
                             ))}

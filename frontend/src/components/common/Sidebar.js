@@ -1,4 +1,4 @@
-// components/common/Sidebar.js - VERSION COMPLETE CORRIGEE
+// components/common/Sidebar.js - VERSION SIMPLIFIEE
 import React, { useState, useEffect } from 'react';
 import {
     Drawer,
@@ -34,11 +34,8 @@ import {
     Construction,
     Assignment,
     CheckCircle,
-    Cancel,
-    Pending,
     Schedule,
     Work,
-    AssignmentInd,
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
@@ -55,7 +52,6 @@ const Sidebar = ({ open }) => {
 
     // États pour les sous-menus
     const [openVisits, setOpenVisits] = useState(true);
-    const [openTeam, setOpenTeam] = useState(false);
 
     useEffect(() => {
         let role = user?.role;
@@ -96,7 +92,7 @@ const Sidebar = ({ open }) => {
     };
 
     // ============================================
-    // ===== MENU ADMIN =====
+    // ===== MENU ADMIN (complet) =====
     // ============================================
     const adminMenu = [
         { text: 'Dashboard', icon: <Dashboard />, path: '/dashboard', divider: false },
@@ -129,7 +125,7 @@ const Sidebar = ({ open }) => {
     ];
 
     // ============================================
-    // ===== MENU RESPONSABLE SOFTWARE =====
+    // ===== MENU RESPONSABLE SOFTWARE (simplifié) =====
     // ============================================
     const responsableMenu = [
         {
@@ -142,31 +138,16 @@ const Sidebar = ({ open }) => {
                     text: 'À venir',
                     path: '/responsable-upcoming',
                     icon: <Schedule fontSize="small" />,
-                    description: 'Visites planifiées'
-                },
-                {
-                    text: 'En attente',
-                    path: '/responsable-pending',
-                    icon: <Pending fontSize="small" />,
-                    description: 'À valider'
                 },
                 {
                     text: 'En cours',
                     path: '/responsable-current',
                     icon: <Work fontSize="small" />,
-                    description: 'Visites en cours'
                 },
                 {
                     text: 'Terminées',
                     path: '/responsable-completed',
                     icon: <CheckCircle fontSize="small" />,
-                    description: 'Visites réalisées'
-                },
-                {
-                    text: 'Historique',
-                    path: '/responsable-history',
-                    icon: <History fontSize="small" />,
-                    description: 'Toutes les visites'
                 },
             ]
         },
@@ -183,7 +164,7 @@ const Sidebar = ({ open }) => {
     ];
 
     // ============================================
-    // ===== MENU TECHNICIEN HARDWARE =====
+    // ===== MENU TECHNICIEN HARDWARE (simplifié) =====
     // ============================================
     const technicienMenu = [
         {
@@ -196,31 +177,16 @@ const Sidebar = ({ open }) => {
                     text: 'À venir',
                     path: '/technicien-upcoming',
                     icon: <Schedule fontSize="small" />,
-                    description: 'Mes prochaines visites'
-                },
-                {
-                    text: 'En attente',
-                    path: '/technicien-pending',
-                    icon: <Pending fontSize="small" />,
-                    description: 'À confirmer'
                 },
                 {
                     text: 'En cours',
                     path: '/technicien-current',
                     icon: <Work fontSize="small" />,
-                    description: 'Mes visites en cours'
                 },
                 {
                     text: 'Terminées',
                     path: '/technicien-completed',
                     icon: <CheckCircle fontSize="small" />,
-                    description: 'Mes visites réalisées'
-                },
-                {
-                    text: 'Historique',
-                    path: '/technicien-history',
-                    icon: <History fontSize="small" />,
-                    description: 'Mon historique'
                 },
             ]
         },
@@ -278,10 +244,7 @@ const Sidebar = ({ open }) => {
                 <div key={index}>
                     <ListItem button onClick={() => setIsOpen(!isOpen)}>
                         <ListItemIcon>{item.icon}</ListItemIcon>
-                        <ListItemText
-                            primary={item.text}
-                            secondary={item.description}
-                        />
+                        <ListItemText primary={item.text} />
                         {isOpen ? <ExpandLess /> : <ExpandMore />}
                     </ListItem>
                     <Collapse in={isOpen} timeout="auto" unmountOnExit>
@@ -297,10 +260,7 @@ const Sidebar = ({ open }) => {
                                     <ListItemIcon sx={{ minWidth: 30 }}>
                                         {sub.icon || <ListIcon fontSize="small" />}
                                     </ListItemIcon>
-                                    <ListItemText
-                                        primary={sub.text}
-                                        secondary={sub.description}
-                                    />
+                                    <ListItemText primary={sub.text} />
                                 </ListItem>
                             ))}
                         </List>
