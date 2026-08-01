@@ -1,4 +1,4 @@
-// components/users/Login.js - VERSION CORRIGÉE AVEC REDIRECTION PAR RÔLE
+// components/users/Login.js - VERSION SANS COMPTES DE TEST
 import React, { useState } from 'react';
 import {
     Box,
@@ -10,6 +10,7 @@ import {
     Alert,
     CircularProgress,
     Link,
+    Divider,
 } from '@mui/material';
 import { useNavigate, Link as RouterLink } from 'react-router-dom';
 import { Login as LoginIcon, Email, Lock } from '@mui/icons-material';
@@ -47,7 +48,6 @@ const Login = () => {
                 console.log('👤 Utilisateur:', userData);
                 console.log('🔑 Rôle:', userData?.role);
 
-                // ✅ STOCKER LE TOKEN
                 if (token) {
                     localStorage.setItem('token', token);
                     console.log('✅ Token stocké dans localStorage');
@@ -58,20 +58,17 @@ const Login = () => {
                     console.log('✅ Token temporaire créé:', tempToken);
                 }
 
-                // ✅ STOCKER L'UTILISATEUR
                 if (userData) {
                     localStorage.setItem('user', JSON.stringify(userData));
                     console.log('✅ Utilisateur stocké');
                 }
 
-                // ✅ Mettre à jour le contexte
                 login(userData);
 
-                // ✅ Vérifier que tout est bien stocké
                 const storedToken = localStorage.getItem('token');
                 console.log('📦 Vérification - Token stocké:', storedToken ? '✅ Oui' : '❌ Non');
 
-                // ✅ REDIRECTION SELON LE RÔLE
+                // ✅ Redirection selon le rôle
                 const role = userData?.role;
                 let redirectPath = '/dashboard';
 
@@ -110,36 +107,37 @@ const Login = () => {
     };
 
     return (
-        <Container maxWidth="sm">
-            <Box
-                sx={{
-                    minHeight: '100vh',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    bgcolor: '#f5f7fa',
-                }}
-            >
+        <Box
+            sx={{
+                minHeight: '100vh',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                bgcolor: '#f5f7fa',
+                p: 2,
+            }}
+        >
+            <Container maxWidth="sm">
                 <Paper
                     elevation={0}
                     sx={{
                         p: 4,
-                        width: '100%',
                         borderRadius: 3,
                         border: '1px solid #e8ecf1',
                         boxShadow: '0 4px 20px rgba(0,0,0,0.06)',
                     }}
                 >
+                    {/* Logo */}
                     <Box sx={{ textAlign: 'center', mb: 4 }}>
                         <Typography
-                            variant="h4"
+                            variant="h3"
                             component="h1"
-                            gutterBottom
                             sx={{
                                 fontWeight: 700,
                                 background: 'linear-gradient(135deg, #0044CC, #00d2ff)',
                                 WebkitBackgroundClip: 'text',
                                 WebkitTextFillColor: 'transparent',
+                                mb: 1,
                             }}
                         >
                             RMS
@@ -147,14 +145,17 @@ const Login = () => {
                         <Typography variant="subtitle1" color="textSecondary">
                             Connexion à votre compte
                         </Typography>
+                        <Divider sx={{ mt: 2 }} />
                     </Box>
 
+                    {/* Erreur */}
                     {error && (
                         <Alert severity="error" sx={{ mb: 3, borderRadius: 2 }} onClose={() => setError('')}>
                             {error}
                         </Alert>
                     )}
 
+                    {/* Formulaire */}
                     <form onSubmit={handleSubmit}>
                         <TextField
                             fullWidth
@@ -209,6 +210,7 @@ const Login = () => {
                         </Button>
                     </form>
 
+                    {/* Inscription */}
                     <Box sx={{ mt: 3, textAlign: 'center' }}>
                         <Typography variant="body2" color="textSecondary">
                             Pas encore de compte ?{' '}
@@ -229,20 +231,10 @@ const Login = () => {
                         </Typography>
                     </Box>
 
-                    <Box sx={{ mt: 2, textAlign: 'center' }}>
-                        <Typography variant="caption" color="textSecondary">
-                            💡 Comptes de test:
-                            <br />
-                            Admin: hamza@gmail.com
-                            <br />
-                            Responsable: aya@gmail.com
-                            <br />
-                            Technicien: hassan@gmail.com
-                        </Typography>
-                    </Box>
+                    {/* ❌ COMPTES DE TEST SUPPRIMÉS */}
                 </Paper>
-            </Box>
-        </Container>
+            </Container>
+        </Box>
     );
 };
 
