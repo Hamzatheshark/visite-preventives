@@ -1147,10 +1147,11 @@ public class PlanningServiceImpl implements PlanningService {
 
                 // ✅ NOTIFIER LES ADMINS
                 String message = String.format(
-                        "🔔 Le technicien %s a annulé son assignement pour la visite V%d du client %s",
+                        "🔔 Le technicien %s a annulé son assignement pour la visite V%d du client %s (site : %s)",
                         nomTechnicien,
                         planning.getNumVisite(),
-                        planning.getSite().getClient().getNom()
+                        planning.getSite().getClient().getNom(),
+                        planning.getSite().getNom()
                 );
                 notificationService.notifierAdmin(message, "TECHNICIEN_ANNULE");
 
@@ -1192,10 +1193,11 @@ public class PlanningServiceImpl implements PlanningService {
 
                 // ✅ NOTIFIER LES ADMINS
                 String message = String.format(
-                        "🔔 Le responsable %s a annulé son assignement pour la visite V%d du client %s",
+                        "🔔 Le responsable %s a annulé son assignement pour la visite V%d du client %s (site : %s)",
                         nomResponsable,
                         planning.getNumVisite(),
-                        planning.getSite().getClient().getNom()
+                        planning.getSite().getClient().getNom(),
+                        planning.getSite().getNom()
                 );
                 notificationService.notifierAdmin(message, "RESPONSABLE_ANNULE");
 
@@ -1240,9 +1242,10 @@ public class PlanningServiceImpl implements PlanningService {
                 Notification notification = new Notification();
                 notification.setTitre("Changement de statut - Visite V" + planning.getNumVisite());
                 notification.setMessage(String.format(
-                        "La visite V%d du client %s a changé de statut : %s -> %s",
+                        "La visite V%d du client %s (site : %s) a changé de statut : %s -> %s",
                         planning.getNumVisite(),
                         planning.getSite().getClient().getNom(),
+                        planning.getSite().getNom(),
                         ancienStatut,
                         nouveauStatut
                 ));

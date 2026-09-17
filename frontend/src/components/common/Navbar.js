@@ -322,25 +322,10 @@ const Navbar = ({ onMenuClick }) => {
                             <Divider />
 
                             <MenuItem
-                                onClick={() => { handleClose(); navigate('/dashboard'); }}
-                                sx={{ py: 1.5 }}
-                            >
-                                <Dashboard sx={{ mr: 2, fontSize: 20 }} /> Tableau de bord
-                            </MenuItem>
-                            <MenuItem
                                 onClick={() => { handleClose(); navigate('/profile'); }}
                                 sx={{ py: 1.5 }}
                             >
                                 <Person sx={{ mr: 2, fontSize: 20 }} /> Mon profil
-                            </MenuItem>
-                            <MenuItem
-                                onClick={() => { handleClose(); navigate('/notifications'); }}
-                                sx={{ py: 1.5 }}
-                            >
-                                <Badge badgeContent={notificationCount} color="error" sx={{ mr: 2 }}>
-                                    <Notifications />
-                                </Badge>
-                                Notifications
                             </MenuItem>
                             <Divider />
                             <MenuItem

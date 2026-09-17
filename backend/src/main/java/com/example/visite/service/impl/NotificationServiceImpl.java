@@ -110,7 +110,10 @@ public class NotificationServiceImpl implements NotificationService {
             Utilisateur responsable = planning.getResponsable();
             if (responsable != null) {
                 Notification notif = new Notification();
-                notif.setTitre("🔔 Visite V" + planning.getNumVisite());
+                notif.setTitre(String.format("🔔 Visite V%d - %s (%s)",
+                        planning.getNumVisite(),
+                        planning.getSite().getNom(),
+                        planning.getSite().getClient().getNom()));
                 notif.setMessage(message);
                 notif.setType(type);
                 notif.setUtilisateur(responsable);
@@ -139,7 +142,10 @@ public class NotificationServiceImpl implements NotificationService {
             Utilisateur technicien = planning.getTechnicien();
             if (technicien != null) {
                 Notification notif = new Notification();
-                notif.setTitre("🔔 Visite V" + planning.getNumVisite());
+                notif.setTitre(String.format("🔔 Visite V%d - %s (%s)",
+                        planning.getNumVisite(),
+                        planning.getSite().getNom(),
+                        planning.getSite().getClient().getNom()));
                 notif.setMessage(message);
                 notif.setType(type);
                 notif.setUtilisateur(technicien);
@@ -191,9 +197,10 @@ public class NotificationServiceImpl implements NotificationService {
                     .orElseThrow(() -> new RuntimeException("Planning non trouvé"));
 
             String message = String.format(
-                    "La visite V%d du client %s a changé de statut : %s -> %s",
+                    "La visite V%d du client %s (site : %s) a changé de statut : %s -> %s",
                     planning.getNumVisite(),
                     planning.getSite().getClient().getNom(),
+                    planning.getSite().getNom(),
                     ancienStatut,
                     nouveauStatut
             );
@@ -226,9 +233,10 @@ public class NotificationServiceImpl implements NotificationService {
                     .orElseThrow(() -> new RuntimeException("Planning non trouvé"));
 
             String message = String.format(
-                    "✅ La visite V%d du client %s a été terminée par %s",
+                    "✅ La visite V%d du client %s (site : %s) a été terminée par %s",
                     planning.getNumVisite(),
                     planning.getSite().getClient().getNom(),
+                    planning.getSite().getNom(),
                     nomUtilisateur
             );
 
@@ -257,10 +265,12 @@ public class NotificationServiceImpl implements NotificationService {
                     .orElseThrow(() -> new RuntimeException("Planning non trouvé"));
 
             String message = String.format(
-                    "❌ L'assignement du %s %s a été annulé pour la visite V%d",
+                    "❌ L'assignement du %s %s a été annulé pour la visite V%d du client %s (site : %s)",
                     type.equals("RESPONSABLE") ? "responsable" : "technicien",
                     nomUtilisateur,
-                    planning.getNumVisite()
+                    planning.getNumVisite(),
+                    planning.getSite().getClient().getNom(),
+                    planning.getSite().getNom()
             );
 
             // Notifier les admins
