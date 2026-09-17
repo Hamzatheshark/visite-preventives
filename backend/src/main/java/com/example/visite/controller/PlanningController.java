@@ -80,13 +80,40 @@ public class PlanningController {
     }
 
     @PostMapping("/lancer-planification-prochaine")
-    public ResponseEntity<String> lancerPlanificationProchaine() {
+    public ResponseEntity<?> lancerPlanificationProchaine(@RequestBody(required = false) Map<String, Object> body) {
         try {
-            log.info("📤 Planification de la prochaine visite pour tous les clients...");
-            int count = planningService.planifierProchaineVisitePourTousLesClients();
-            return ResponseEntity.ok(count + " client(s) traités avec succès");
+            if (body == null || body.get("periode") == null) {
+                log.info("📤 Planification automatique de la prochaine période");
+                int count = planningService.planifierProchaineVisitePourTousLesClients();
+                return ResponseEntity.ok(Map.of("count", count, "periode", "auto"));
+            }
+            Integer periode = Integer.valueOf(body.get("periode").toString());
+            log.info("📤 Planification de la période globale P{}", periode);
+            int count = planningService.planifierProchaineVisitePourTousLesClients(periode);
+            return ResponseEntity.ok(Map.of("count", count, "periode", periode));
         } catch (Exception e) {
             log.error("❌ Erreur planification: {}", e.getMessage(), e);
+            return ResponseEntity.internalServerError().body("Erreur: " + e.getMessage());
+        }
+    }
+
+    @GetMapping("/apercu-planification/{periode}")
+    public ResponseEntity<?> getApercuPlanification(@PathVariable Integer periode) {
+        try {
+            log.info("📊 Aperçu de la planification P{}", periode);
+            return ResponseEntity.ok(planningService.getApercuPlanification(periode));
+        } catch (Exception e) {
+            log.error("❌ Erreur aperçu: {}", e.getMessage(), e);
+            return ResponseEntity.internalServerError().body("Erreur: " + e.getMessage());
+        }
+    }
+
+    @GetMapping("/etat-planification")
+    public ResponseEntity<?> getEtatPlanification() {
+        try {
+            return ResponseEntity.ok(planningService.getEtatPlanification());
+        } catch (Exception e) {
+            log.error("❌ Erreur: {}", e.getMessage(), e);
             return ResponseEntity.internalServerError().body("Erreur: " + e.getMessage());
         }
     }

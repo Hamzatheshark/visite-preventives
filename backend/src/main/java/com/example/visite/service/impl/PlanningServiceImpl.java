@@ -183,55 +183,37 @@ public class PlanningServiceImpl implements PlanningService {
     @Override
     @Transactional
     public int planifierProchaineVisitePourTousLesClients() {
-        log.info("📅 Planification UNIQUEMENT de la prochaine visite manquante (synchronisée)");
-
+        log.info("📅 Planification automatique de la prochaine période globale");
         List<Client> clients = clientRepository.findByActifTrue();
-        int totalCrees = 0;
-        int totalEmailsEnvoyes = 0;
-
-        // ✅ Définir l'ordre des zones
-        List<String> ordreZones = Arrays.asList("Centre", "Nord", "Sud", "Autre");
-
-        // ✅ Définition des villes par zone
-        List<String> zoneNord = Arrays.asList(
-                "tanger", "tetouan", "chefchaouen", "larache", "asilah",
-                "fnideq", "martil", "m'diq", "al hoceima", "nador",
-                "oujda", "berkane", "taourirt", "jerada", "saidia", "driouch",
-                "taza", "taounate", "guercif"
-        );
-
-        List<String> zoneCentre = Arrays.asList(
-                "casablanca", "rabat", "salé", "temara", "kenitra", "mohammedia",
-                "benslimane", "bouznika", "berrechid", "settat", "el jadida",
-                "azemmour", "khouribga", "oued zem", "sidi slimane", "sidi kacem",
-                "meknes", "fes", "khemisset", "sefrou", "moulay yaacoub"
-        );
-
-        List<String> zoneSud = Arrays.asList(
-                "agadir", "marrakech", "essaouira", "safi", "chichaoua",
-                "el kelaa des sraghna", "youssoufia", "rehamna", "taroudannt",
-                "tiznit", "ochtane", "biougra", "taliouine", "ouarzazate",
-                "tinghir", "zagora", "rissani", "erfoud", "midelt",
-                "guelmim", "tan-tan", "taghjijt", "bouizakarne", "sidi ifni",
-                "laayoune", "boujdour", "tarfaya", "es-semara", "dakhla",
-                "azilal", "khenifra", "fquih ben salah", "beni mellal"
-        );
-
         int anneeActuelle = LocalDate.now().getYear();
         int moisActuel = LocalDate.now().getMonthValue();
-
         int prochainePeriodeGlobale = trouverProchainePeriodeGlobale(clients, anneeActuelle, moisActuel);
-
         if (prochainePeriodeGlobale == -1) {
             log.info("ℹ️ Toutes les visites sont planifiées pour tous les clients");
             return 0;
         }
+        return planifierProchaineVisitePourTousLesClients(prochainePeriodeGlobale);
+    }
 
-        log.info("📌 Prochaine période globale à planifier: Période {}", prochainePeriodeGlobale);
-
+    @Override
+    @Transactional
+    public int planifierProchaineVisitePourTousLesClients(Integer periodeGlobale) {
+        log.info("📅 Planification de la période globale P{}", periodeGlobale);
+        List<Client> clients = clientRepository.findByActifTrue();
+        int totalCrees = 0;
+        int totalEmailsEnvoyes = 0;
+        List<String> ordreZones = Arrays.asList("Centre", "Nord", "Sud", "Autre");
+        List<String> zoneNord = Arrays.asList("tanger", "tetouan", "chefchaouen", "larache", "asilah", "fnideq", "martil", "m'diq", "al hoceima", "nador", "oujda", "berkane", "taourirt", "jerada", "saidia", "driouch", "taza", "taounate", "guercif");
+        List<String> zoneCentre = Arrays.asList("casablanca", "rabat", "salé", "temara", "kenitra", "mohammedia", "benslimane", "bouznika", "berrechid", "settat", "el jadida", "azemmour", "khouribga", "oued zem", "sidi slimane", "sidi kacem", "meknes", "fes", "khemisset", "sefrou", "moulay yaacoub");
+        List<String> zoneSud = Arrays.asList("agadir", "marrakech", "essaouira", "safi", "chichaoua", "el kelaa des sraghna", "youssoufia", "rehamna", "taroudannt", "tiznit", "ochtane", "biougra", "taliouine", "ouarzazate", "tinghir", "zagora", "rissani", "erfoud", "midelt", "guelmim", "tan-tan", "taghjijt", "bouizakarne", "sidi ifni", "laayoune", "boujdour", "tarfaya", "es-semara", "dakhla", "azilal", "khenifra", "fquih ben salah", "beni mellal");
+        int anneeActuelle = LocalDate.now().getYear();
+        int anneeCible = anneeActuelle;
+        if (periodeGlobale >= 5) {
+            anneeCible = anneeActuelle + 1;
+        }
+        log.info("📌 Période globale: P{} (année cible: {})", periodeGlobale, anneeCible);
         List<Site> tousLesSites = new ArrayList<>();
         Map<Integer, Client> clientParSite = new HashMap<>();
-
         for (Client client : clients) {
             if (client.getNbVisitesAn() == null || client.getNbVisitesAn() <= 0) continue;
             List<Site> sites = siteRepository.findByClientIdAndActifTrue(client.getId());
@@ -244,69 +226,44 @@ public class PlanningServiceImpl implements PlanningService {
                 }
             }
         }
-
         Site temara = new Site();
         temara.setLatitude(33.9286);
         temara.setLongitude(-6.9020);
-
         tousLesSites.sort((s1, s2) -> {
             String ville1 = extractVille(s1.getAdresse()).toLowerCase().trim();
             String ville2 = extractVille(s2.getAdresse()).toLowerCase().trim();
-
             String zone1 = "Autre";
             String zone2 = "Autre";
-
             if (zoneCentre.contains(ville1)) zone1 = "Centre";
             else if (zoneNord.contains(ville1)) zone1 = "Nord";
             else if (zoneSud.contains(ville1)) zone1 = "Sud";
-
             if (zoneCentre.contains(ville2)) zone2 = "Centre";
             else if (zoneNord.contains(ville2)) zone2 = "Nord";
             else if (zoneSud.contains(ville2)) zone2 = "Sud";
-
             int index1 = ordreZones.indexOf(zone1);
             int index2 = ordreZones.indexOf(zone2);
-
             if (index1 != index2) {
                 return Integer.compare(index1, index2);
             }
-
             double d1 = geocodingService.calculateDistance(temara, s1);
             double d2 = geocodingService.calculateDistance(temara, s2);
             return Double.compare(d1, d2);
         });
-
-        log.info("📍 Ordre global des sites: {}",
-                tousLesSites.stream()
-                        .map(s -> extractVille(s.getAdresse()))
-                        .collect(Collectors.toList()));
-
         LocalDate currentDate = LocalDate.now().plusDays(1);
         Set<LocalDate> datesUtilisees = new HashSet<>();
-
         for (Site site : tousLesSites) {
             Client client = clientParSite.get(site.getId());
             if (client == null) continue;
-
             int nbVisitesAn = client.getNbVisitesAn() != null ? client.getNbVisitesAn() : 4;
-
-            int numVisiteAPlanifier = getNumeroVisitePourPeriode(prochainePeriodeGlobale, nbVisitesAn);
+            int numVisiteAPlanifier = getNumeroVisitePourPeriode(periodeGlobale, nbVisitesAn);
             if (numVisiteAPlanifier == -1) {
-                log.debug("   ⏭️ Site: {} - Période {} non applicable ({} visites/an)",
-                        site.getNom(), prochainePeriodeGlobale, nbVisitesAn);
+                log.debug("   ⏭️ Site: {} - P{} non applicable ({} visites/an)", site.getNom(), periodeGlobale, nbVisitesAn);
                 continue;
             }
-
-            int anneeCible = anneeActuelle;
-            if (prochainePeriodeGlobale >= 5 && prochainePeriodeGlobale <= 8) {
-                anneeCible = anneeActuelle + 1;
-            }
-
             List<Planning> planningsExistants = planningRepository.findBySite(site);
             boolean existeDeja = false;
             for (Planning p : planningsExistants) {
-                if (p.getNumVisite() != null && p.getNumVisite() == numVisiteAPlanifier
-                        && p.getStatut() != StatutVisite.ANNULE) {
+                if (p.getNumVisite() != null && p.getNumVisite() == numVisiteAPlanifier && p.getStatut() != StatutVisite.ANNULE) {
                     if (p.getDateProposee() != null && p.getDateProposee().getYear() == anneeCible) {
                         existeDeja = true;
                         break;
@@ -317,14 +274,10 @@ public class PlanningServiceImpl implements PlanningService {
                 log.info("   ⏭️ Site: {} - V{} déjà planifiée en {}", site.getNom(), numVisiteAPlanifier, anneeCible);
                 continue;
             }
-
             HolidayService.Period period = holidayService.getPeriodForVisite(numVisiteAPlanifier, nbVisitesAn);
             LocalDate dateDebutPeriode = LocalDate.of(anneeCible, period.moisDebut, 1);
-            LocalDate dateFinPeriode = LocalDate.of(anneeCible, period.moisFin, 1)
-                    .with(java.time.temporal.TemporalAdjusters.lastDayOfMonth());
-
+            LocalDate dateFinPeriode = LocalDate.of(anneeCible, period.moisFin, 1).with(java.time.temporal.TemporalAdjusters.lastDayOfMonth());
             LocalDate startSearch = dateDebutPeriode.isAfter(currentDate) ? dateDebutPeriode : currentDate;
-
             LocalDate dateFinale = null;
             for (LocalDate d = startSearch; !d.isAfter(dateFinPeriode); d = d.plusDays(1)) {
                 if (holidayService.isValidDateForVisit(d) && !datesUtilisees.contains(d)) {
@@ -332,16 +285,12 @@ public class PlanningServiceImpl implements PlanningService {
                     break;
                 }
             }
-
             if (dateFinale == null) {
-                log.warn("   ⚠️ Site: {} - Aucune date disponible dans la période {}-{} pour V{}",
-                        site.getNom(), dateDebutPeriode, dateFinPeriode, numVisiteAPlanifier);
+                log.warn("   ⚠️ Site: {} - Aucune date disponible pour V{}", site.getNom(), numVisiteAPlanifier);
                 continue;
             }
-
             datesUtilisees.add(dateFinale);
             currentDate = dateFinale.plusDays(1);
-
             Planning planning = new Planning();
             planning.setSite(site);
             planning.setNumVisite(numVisiteAPlanifier);
@@ -350,34 +299,48 @@ public class PlanningServiceImpl implements PlanningService {
             planning.setDateEnvoi(LocalDateTime.now());
             planning.setDateProposee(dateFinale);
             planning.setDateVisite(dateFinale);
-
             Planning saved = planningRepository.save(planning);
             totalCrees++;
-
-            String numAffiche = getNumeroVisiteAffiche(numVisiteAPlanifier, nbVisitesAn);
-            double distance = geocodingService.calculateDistance(temara, site);
-            String ville = extractVille(site.getAdresse());
-            String zone = "Autre";
-            if (zoneCentre.contains(ville.toLowerCase())) zone = "Centre";
-            else if (zoneNord.contains(ville.toLowerCase())) zone = "Nord";
-            else if (zoneSud.contains(ville.toLowerCase())) zone = "Sud";
-
-            log.info("   ✅ {} - {} ({}) - Zone: {} - Distance: {:.1f} km - Date: {}",
-                    numAffiche, site.getNom(), ville, zone, distance, dateFinale);
-
-            log.info("   📧 Envoi de l'email pour V{} - {}", numVisiteAPlanifier, site.getNom());
+            log.info("   ✅ V{} - {} - Date: {}", numVisiteAPlanifier, site.getNom(), dateFinale);
             try {
                 envoyerProposition(saved.getId());
                 totalEmailsEnvoyes++;
-                log.info("   ✅ Email envoyé pour V{} - {}", numVisiteAPlanifier, site.getNom());
             } catch (Exception e) {
-                log.error("   ❌ Erreur envoi email pour V{} - {}: {}",
-                        numVisiteAPlanifier, site.getNom(), e.getMessage());
+                log.error("   ❌ Erreur email V{} - {}: {}", numVisiteAPlanifier, site.getNom(), e.getMessage());
             }
         }
-
-        log.info("✅ Planification terminée: {} visites créées, {} emails envoyés", totalCrees, totalEmailsEnvoyes);
+        log.info("✅ Planification P{} terminée: {} visites créées, {} emails envoyés", periodeGlobale, totalCrees, totalEmailsEnvoyes);
         return totalCrees;
+    }
+
+    @Override
+    public Map<String, Object> getApercuPlanification(Integer periodeGlobale) {
+        log.info("📊 Aperçu de la planification P{}", periodeGlobale);
+        List<Client> clients = clientRepository.findByActifTrue();
+        Map<String, Object> apercu = new HashMap<>();
+        Map<Integer, Integer> parFrequence = new LinkedHashMap<>();
+        Map<Integer, Integer> parVagueReelle = new LinkedHashMap<>();
+        int total = 0;
+        int totalSites = 0;
+        for (Client client : clients) {
+            int freq = client.getNbVisitesAn() != null ? client.getNbVisitesAn() : 4;
+            List<Site> sites = siteRepository.findByClientIdAndActifTrue(client.getId());
+            int nbSites = sites.size();
+            totalSites += nbSites;
+            int numVisite = getNumeroVisitePourPeriode(periodeGlobale, freq);
+            if (numVisite != -1) {
+                parFrequence.merge(freq, nbSites, Integer::sum);
+                parVagueReelle.merge(numVisite, nbSites, Integer::sum);
+                total += nbSites;
+            }
+        }
+        apercu.put("periodeGlobale", periodeGlobale);
+        apercu.put("total", total);
+        apercu.put("totalSites", totalSites);
+        apercu.put("parFrequence", parFrequence);
+        apercu.put("parVagueReelle", parVagueReelle);
+        log.info("📊 Aperçu P{}: {} sites concernés sur {}", periodeGlobale, total, totalSites);
+        return apercu;
     }
 
     @Override
@@ -440,6 +403,49 @@ public class PlanningServiceImpl implements PlanningService {
 
         log.info("✅ Planification terminée pour {} clients", totalCrees);
         return totalCrees;
+    }
+
+    @Override
+    public Map<String, Object> getEtatPlanification() {
+        log.info("📊 Récupération de l'état de la planification");
+        List<Client> clients = clientRepository.findByActifTrue();
+        int anneeActuelle = LocalDate.now().getYear();
+        int moisActuel = LocalDate.now().getMonthValue();
+
+        int periodeEnCours = 1;
+        if (moisActuel >= 1 && moisActuel <= 3) periodeEnCours = 1;
+        else if (moisActuel >= 4 && moisActuel <= 6) periodeEnCours = 2;
+        else if (moisActuel >= 7 && moisActuel <= 9) periodeEnCours = 3;
+        else periodeEnCours = 4;
+
+        Map<String, Object> etat = new HashMap<>();
+        etat.put("anneeActuelle", anneeActuelle);
+        etat.put("periodeEnCours", periodeEnCours);
+        etat.put("moisActuel", moisActuel);
+        etat.put("dateAujourdhui", LocalDate.now().toString());
+
+        // ✅ Toujours commencer à P1 de l'année actuelle, puis aller jusqu'à 3 ans après
+        List<Map<String, Object>> prochainesPeriodes = new ArrayList<>();
+        int nbAnneesAAfficher = 3; // année actuelle + 2 années suivantes
+
+        for (int offsetAnnee = 0; offsetAnnee < nbAnneesAAfficher; offsetAnnee++) {
+            int annee = anneeActuelle + offsetAnnee;
+            for (int vagueLocale = 1; vagueLocale <= 4; vagueLocale++) {
+                int periodeGlobale = (offsetAnnee * 4) + vagueLocale;
+                Map<String, Object> p = new HashMap<>();
+                p.put("periodeGlobale", periodeGlobale);
+                p.put("annee", annee);
+                p.put("vagueLocale", vagueLocale);
+                p.put("label", "V" + vagueLocale);
+                p.put("estPassee", offsetAnnee == 0 && vagueLocale < periodeEnCours);
+                p.put("estEnCours", offsetAnnee == 0 && vagueLocale == periodeEnCours);
+                prochainesPeriodes.add(p);
+            }
+        }
+        etat.put("prochainesPeriodes", prochainesPeriodes);
+
+        log.info("📊 État: P{} en cours, {} périodes listées", periodeEnCours, prochainesPeriodes.size());
+        return etat;
     }
 
     @Override

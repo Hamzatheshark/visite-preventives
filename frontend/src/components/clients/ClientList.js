@@ -39,6 +39,7 @@ import {
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import api from '../../api/axiosConfig';
+import PlanificationDialog from './PlanificationDialog';
 
 const ClientList = () => {
     const navigate = useNavigate();
@@ -50,6 +51,7 @@ const ClientList = () => {
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
     const [clientToDelete, setClientToDelete] = useState(null);
     const [planifying, setPlanifying] = useState(false);
+    const [planifDialogOpen, setPlanifDialogOpen] = useState(false);
 
     useEffect(() => {
         fetchClients();
@@ -69,15 +71,18 @@ const ClientList = () => {
         }
     };
 
-    const handlePlanifierProchaineTous = async () => {
-        if (!window.confirm('Planifier la prochaine visite pour tous les clients ?')) return;
+    const handlePlanifierProchaineTous = () => {
+        setPlanifDialogOpen(true);
+    };
 
+    const handleConfirmPlanification = async (vague) => {
         setPlanifying(true);
         setError(null);
-
         try {
-            await api.post('/plannings/lancer-planification-prochaine');
-            alert('✅ Prochaine visite planifiée pour tous les clients !');
+            const response = await api.post('/plannings/lancer-planification-prochaine', { periode: vague });
+            const count = response.data?.count || 0;
+            alert(`✅ Vague V${vague} planifiée : ${count} visite(s) créée(s) !`);
+            setPlanifDialogOpen(false);
             fetchClients();
         } catch (error) {
             console.error('❌ Erreur:', error);
@@ -191,7 +196,7 @@ const ClientList = () => {
                         size="small"
                         sx={{ borderRadius: 2, textTransform: 'none' }}
                     >
-                        {planifying ? '...' : '📌 Prochaine visite'}
+                        {planifying ? '...' : '📌 Planifier une vague'}
                     </Button>
                     <Button
                         variant="contained"
@@ -414,6 +419,15 @@ const ClientList = () => {
                     </Button>
                 </DialogActions>
             </Dialog>
+
+            {/* Dialog planification */}
+            <PlanificationDialog
+                open={planifDialogOpen}
+                onClose={() => setPlanifDialogOpen(false)}
+                clients={clients}
+                onConfirm={handleConfirmPlanification}
+                loading={planifying}
+            />
         </Box>
     );
 };

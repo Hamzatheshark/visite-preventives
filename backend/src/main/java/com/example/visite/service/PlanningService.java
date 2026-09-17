@@ -6,6 +6,7 @@ import com.example.visite.model.enums.StatutVisite;
 import com.example.visite.dto.PlanningDTO;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 
 public interface PlanningService {
     // CRUD
@@ -49,6 +50,9 @@ public interface PlanningService {
     // Notifications
     void notifierChangementStatut(Integer planningId, String ancienStatut, String nouveauStatut);
     void planifierVisitesParZone();
+    int planifierProchaineVisitePourTousLesClients(Integer periodeGlobale);
+    Map<String, Object> getApercuPlanification(Integer periodeGlobale);
+    Map<String, Object> getEtatPlanification();
     // Conversion DTO
     PlanningDTO convertToDTO(Planning planning);
     List<PlanningDTO> convertToDTOList(List<Planning> plannings);
